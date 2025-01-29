@@ -1,1 +1,143 @@
+require "io"
 
+local TokenType = @enum{
+  IDENTIFIER = 0,
+  OPEN_BRACKET,
+  CLOSE_BRACKET,
+  OPEN_BRACE,
+  CLOSE_BRACE,
+  STRING,
+  NUMBER,
+  COMMA,
+  COLON,
+  UNKNOWN,
+}
+
+local Token = @record{
+  val: string,
+  type: TokenType
+}
+
+local function token_type_tostring(ttype: TokenType)
+  switch ttype do
+    case TokenType.IDENTIFIER then
+      return "IDENTIFIER"
+    case TokenType.OPEN_BRACKET then
+      return "OPEN_BRACKET"
+    case TokenType.CLOSE_BRACKET then
+      return "CLOSE_BRACKET"
+    case TokenType.OPEN_BRACE then
+      return "OPEN_BRACE"
+    case TokenType.CLOSE_BRACE then
+      return "CLOSE_BRACE"
+    case TokenType.STRING then
+      return "STRING"
+    case TokenType.NUMBER then
+      return "NUMBER"
+    case TokenType.COMMA then
+      return "COMMA"
+    case TokenType.COLON then
+      return "COLON"
+    case TokenType.UNKNOWN then
+      return "UNKNOWN"
+    else
+      return "ERROR"
+  end
+end
+
+local function tokenize(str: string)
+  local tokens:sequence(Token)
+  local index = 1
+
+  while index ~= #str do
+    local current_char = str:sub(index, index)
+    if current_char == "[" then
+      tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET})
+    elseif current_char == "]" then
+      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET})    elseif current_char == "{" then
+      tokens:push({ val = current_char, type = TokenType.OPEN_BRACE})
+    elseif current_char == "}" then
+      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE})
+    elseif current_char:match("[%a_]") then
+      local val = current_char
+      while str:sub(index + 1, index + 1):match("[%w_]") do
+        val = val .. str:sub(index + 1, index + 1)
+        index = index + 1
+      end
+      tokens:push({ val = val, type = TokenType.IDENTIFIER})
+    -- TODO: escape characters
+    elseif current_char == '"' then
+      local val = current_char
+      while str:sub(index + 1, index + 1) ~= '"' do
+        val = val .. str:sub(index + 1, index + 1)
+        index = index + 1
+      end
+      val = val .. '"'
+      index = index + 1
+      tokens:push({ val = val, type = TokenType.STRING})
+    elseif current_char:match("[%-%d]") then
+      local val = current_char
+      local decimal = false
+      local exponent = false
+      local after_exp = false
+      local err = false
+      while str:sub(index + 1, index + 1):match("[%d%.eE%-%+]") do
+        local next_char = str:sub(index + 1, index + 1)
+
+        if next_char == "." then
+          if decimal then
+            err = true
+          end
+          decimal = true
+        elseif next_char:match("[eE]") then
+          if exponent then
+            err = true
+          end
+          exponent = true
+          after_exp = true
+        elseif after_exp and next_char:match("[^%-%+%d]") then
+          err = true
+        end
+        val = val .. str:sub(index + 1, index + 1)
+        index = index + 1
+      end
+      if current_char == "-" and #val == 1 then
+        err = true
+      end
+      if val:match("0%d") then
+        err = true
+      end
+      if err then
+        tokens:push({ val = val, type = TokenType.UNKNOWN})
+      else
+        tokens:push({ val = val, type = TokenType.NUMBER})
+      end
+    elseif current_char == "," then
+      tokens:push({ val = current_char, type = TokenType.COMMA})
+    elseif current_char == ":" then
+      tokens:push({ val = current_char, type = TokenType.COLON})
+    elseif current_char:match("%s") then
+    else
+      tokens:push({ val = current_char, type = TokenType.UNKNOWN})
+    end
+    index = index + 1
+  end
+
+  return tokens
+end
+
+
+local file, err = io.open("test.json")
+
+assert(file:isopen(), ("Failed to open file: %s"):format(err))
+
+local content, err = file:read("a")
+
+assert(err == "", err)
+
+
+local tokens = tokenize(content)
+
+for _, token in ipairs(tokens) do
+  print(token.val, token_type_tostring(token.type))
+end

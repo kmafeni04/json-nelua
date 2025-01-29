@@ -1,7 +1,9 @@
 {
   "string": "Hello, world!",
+  "special": "Hello\nworld!",
   "number": 42,
   "float": 3.14,
+  "exponent": 6.02e-23,
   "boolean_true": true,
   "boolean_false": false,
   "null_value": null,
