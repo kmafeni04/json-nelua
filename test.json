@@ -1,6 +1,9 @@
 {
   "string": "Hello, world!",
-  "special": "Hello\nworld!",
+  "message": "Hello, \"world\"!\nWelcome to JSON.",
+  "path": "C:\\Users\\John\\Documents",
+  "emoji": "Unicode example: \u2764",
+  "special_chars": "Tab:\tBackspace:\bNewline:\nCarriage Return:\rForm Feed:\f",
   "number": 42,
   "float": 3.14,
   "exponent": 6.02e-23,

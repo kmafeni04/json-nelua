@@ -1,7 +1,39 @@
 require "io"
+require "utf8"
+require "traits"
+
+local function pos_to_line_char(pos: integer, content: string)
+  local s_line = 1
+  local pos_at_line = 0
+  local text = content:sub(1, pos)
+  for line in text:gmatch("[^\r\n]*\r?\n") do
+    pos_at_line = pos_at_line + #line
+    s_line = s_line + 1
+  end
+  local s_char = pos - pos_at_line
+  return s_line, s_char
+end
+
+local function unescape_str(str: string)
+  str = str:gsub("\\n", "\n")  -- Newline  
+  str = str:gsub("\\r", "\r")  -- Carriage return  
+  str = str:gsub("\\t", "\t")  -- Tab  
+  str = str:gsub("\\b", "\b")  -- Backspace  
+  str = str:gsub("\\f", "\f")  -- Form Feed
+  str = str:gsub('\\"', '"') -- Double quote  
+  str = str:gsub("\\\\", "\\") -- Backslash  
+  str = str:gsub("\\/", "/") -- Forwardslash  
+  str = str:gsub("\\u(%x+)", function(h: string) -- Unicode characters
+    return utf8.char(tonumber(h, 16))  
+  end)  
+
+  return str
+end
 
 local TokenType = @enum{
-  IDENTIFIER = 0,
+  NULL = 0,
+  FALSE,
+  TRUE,
   OPEN_BRACKET,
   CLOSE_BRACKET,
   OPEN_BRACE,
@@ -10,7 +42,6 @@ local TokenType = @enum{
   NUMBER,
   COMMA,
   COLON,
-  UNKNOWN,
 }
 
 local Token = @record{
@@ -20,8 +51,12 @@ local Token = @record{
 
 local function token_type_tostring(ttype: TokenType)
   switch ttype do
-    case TokenType.IDENTIFIER then
-      return "IDENTIFIER"
+    case TokenType.NULL then
+      return "NULL"
+    case TokenType.FALSE then
+      return "FALSE"
+    case TokenType.TRUE then
+      return "TRUE"
     case TokenType.OPEN_BRACKET then
       return "OPEN_BRACKET"
     case TokenType.CLOSE_BRACKET then
@@ -38,10 +73,8 @@ local function token_type_tostring(ttype: TokenType)
       return "COMMA"
     case TokenType.COLON then
       return "COLON"
-    case TokenType.UNKNOWN then
-      return "UNKNOWN"
     else
-      return "ERROR"
+      return ("ERROR: unknown token type `%d`"):format(ttype)
   end
 end
 
@@ -54,7 +87,8 @@ local function tokenize(str: string)
     if current_char == "[" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET})
     elseif current_char == "]" then
-      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET})    elseif current_char == "{" then
+      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET})
+    elseif current_char == "{" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACE})
     elseif current_char == "}" then
       tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE})
@@ -64,15 +98,31 @@ local function tokenize(str: string)
         val = val .. str:sub(index + 1, index + 1)
         index = index + 1
       end
-      tokens:push({ val = val, type = TokenType.IDENTIFIER})
-    -- TODO: escape characters
+      if val == "null" then
+        tokens:push({ val = val, type = TokenType.NULL})
+      elseif val == "false" then
+        tokens:push({ val = val, type = TokenType.FALSE})
+      elseif val == "true" then
+        tokens:push({ val = val, type = TokenType.TRUE})
+      else
+        goto ERROR
+      end
     elseif current_char == '"' then
-      local val = current_char
+      local val = ""
       while str:sub(index + 1, index + 1) ~= '"' do
+        if str:sub(index + 1, index + 1) == "\\" then
+          val = val .. "\\"
+          if str:sub(index + 2, index + 2) == '"' then
+            val = val .. '"'
+            index = index + 1
+          end
+          index = index + 1
+        end
         val = val .. str:sub(index + 1, index + 1)
         index = index + 1
       end
-      val = val .. '"'
+      val = unescape_str(val)
+      val = '"' .. val .. '"'
       index = index + 1
       tokens:push({ val = val, type = TokenType.STRING})
     elseif current_char:match("[%-%d]") then
@@ -104,11 +154,11 @@ local function tokenize(str: string)
       if current_char == "-" and #val == 1 then
         err = true
       end
-      if val:match("0%d") then
+      if val:match("^0%d") then
         err = true
       end
       if err then
-        tokens:push({ val = val, type = TokenType.UNKNOWN})
+        goto ERROR
       else
         tokens:push({ val = val, type = TokenType.NUMBER})
       end
@@ -118,12 +168,17 @@ local function tokenize(str: string)
       tokens:push({ val = current_char, type = TokenType.COLON})
     elseif current_char:match("%s") then
     else
-      tokens:push({ val = current_char, type = TokenType.UNKNOWN})
+      goto ERROR
     end
     index = index + 1
   end
 
-  return tokens
+  return true, tokens, ""
+  ::ERROR::
+  local content = str:sub(1, index)
+  local current_char = content:sub(index, index)
+  local line, char = pos_to_line_char(index, content)
+  return false, (@sequence(Token))({}), ("ERROR: Unknown token `%s` at line `%d`, character `%d`"):format(current_char, line, char)
 end
 
 
@@ -135,8 +190,9 @@ local content, err = file:read("a")
 
 assert(err == "", err)
 
+local ok, tokens, err = tokenize(content)
 
-local tokens = tokenize(content)
+assert(ok, err)
 
 for _, token in ipairs(tokens) do
   print(token.val, token_type_tostring(token.type))
