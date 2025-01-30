@@ -46,7 +46,9 @@ local TokenType = @enum{
 
 local Token = @record{
   val: string,
-  type: TokenType
+  type: TokenType,
+  start_pos: uinteger,
+  end_pos: uinteger
 }
 
 local function token_type_tostring(ttype: TokenType)
@@ -85,29 +87,31 @@ local function tokenize(str: string)
   while index ~= #str do
     local current_char = str:sub(index, index)
     if current_char == "[" then
-      tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET})
+      tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET, start_pos = index, end_pos = index })
     elseif current_char == "]" then
-      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET})
+      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET, start_pos = index, end_pos = index })
     elseif current_char == "{" then
-      tokens:push({ val = current_char, type = TokenType.OPEN_BRACE})
+      tokens:push({ val = current_char, type = TokenType.OPEN_BRACE, start_pos = index, end_pos = index })
     elseif current_char == "}" then
-      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE})
+      tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE, start_pos = index, end_pos = index })
     elseif current_char:match("[%a_]") then
+      local s_pos = index
       local val = current_char
       while str:sub(index + 1, index + 1):match("[%w_]") do
         val = val .. str:sub(index + 1, index + 1)
         index = index + 1
       end
       if val == "null" then
-        tokens:push({ val = val, type = TokenType.NULL})
+        tokens:push({ val = val, type = TokenType.NULL, start_pos = s_pos, end_pos = index })
       elseif val == "false" then
-        tokens:push({ val = val, type = TokenType.FALSE})
+        tokens:push({ val = val, type = TokenType.FALSE, start_pos = s_pos, end_pos = index })
       elseif val == "true" then
-        tokens:push({ val = val, type = TokenType.TRUE})
+        tokens:push({ val = val, type = TokenType.TRUE, start_pos = s_pos, end_pos = index })
       else
         goto ERROR
       end
     elseif current_char == '"' then
+      local s_pos = index
       local val = ""
       while str:sub(index + 1, index + 1) ~= '"' do
         if str:sub(index + 1, index + 1) == "\\" then
@@ -122,10 +126,10 @@ local function tokenize(str: string)
         index = index + 1
       end
       val = unescape_str(val)
-      val = '"' .. val .. '"'
       index = index + 1
-      tokens:push({ val = val, type = TokenType.STRING})
+      tokens:push({ val = val, type = TokenType.STRING, start_pos = s_pos, end_pos = index })
     elseif current_char:match("[%-%d]") then
+      local s_pos = index
       local val = current_char
       local decimal = false
       local exponent = false
@@ -160,12 +164,12 @@ local function tokenize(str: string)
       if err then
         goto ERROR
       else
-        tokens:push({ val = val, type = TokenType.NUMBER})
+        tokens:push({ val = val, type = TokenType.NUMBER, start_pos = s_pos, end_pos = index })
       end
     elseif current_char == "," then
-      tokens:push({ val = current_char, type = TokenType.COMMA})
+      tokens:push({ val = current_char, type = TokenType.COMMA, start_pos = index, end_pos = index })
     elseif current_char == ":" then
-      tokens:push({ val = current_char, type = TokenType.COLON})
+      tokens:push({ val = current_char, type = TokenType.COLON, start_pos = index, end_pos = index })
     elseif current_char:match("%s") then
     else
       goto ERROR
@@ -181,19 +185,188 @@ local function tokenize(str: string)
   return false, (@sequence(Token))({}), ("ERROR: Unknown token `%s` at line `%d`, character `%d`"):format(current_char, line, char)
 end
 
+local JsonNodeType = @enum{
+  NULL = 0,
+  BOOLEAN,
+  STRING,
+  NUMBER,
+  ARRAY,
+  OBJECT
+}
 
-local file, err = io.open("test.json")
+local function json_node_type_tostring(jntype: JsonNodeType)
+  switch jntype do
+  case JsonNodeType.NULL then
+    return "NULL"
+  case JsonNodeType.BOOLEAN then
+    return "BOOLEAN"
+  case JsonNodeType.STRING then
+    return "STRING"
+  case JsonNodeType.NUMBER then
+    return "NUMBER"
+  case JsonNodeType.ARRAY then
+    return "ARRAY"
+  case JsonNodeType.OBJECT then
+    return "OBJECT"
+  end
+  return ("ERROR: unknown type `%s`"):format(jntype)
+end
 
-assert(file:isopen(), ("Failed to open file: %s"):format(err))
+local JsonNode = @record{
+  val: union{
+    null: niltype,
+    bol: boolean,
+    str: string,
+    num: number,
+    arr: sequence(JsonNode),
+    obj: hashmap(string, JsonNode)
+  },
+  type: JsonNodeType
+}
 
-local content, err = file:read("a")
+function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, sequence(JsonNode), hashmap(string, JsonNode)))
+  local node: JsonNode = {}
+  node.type = node_type
 
-assert(err == "", err)
+  -- ##[[
+  --   for k, v in pairs(value.type) do
+  --     print(k, v)
+  --   end
+  --   print()
+  -- ]]
+  -- 
+    ## print(value.type)
 
-local ok, tokens, err = tokenize(content)
+  ## if value.type.is_string then
+    if node_type == JsonNodeType.NUMBER then
+      node.val.num = tonumber(value)
+      return true, node, ""
+    end
+    node.val.str = value
+    return true, node, ""
+  ## elseif value.type.is_hashmap then
+    node.val.obj = value
+    return true, node, ""
+  ## end
+
+  return false, (@JsonNode)({}), ("Invalid node type: `%d`"):format(node_type)
+end
+
+local parse_value: function(tokens: sequence(Token), index: uinteger): (boolean, JsonNode, string)
+
+-- TODO: Properly show errors on trailing commas
+-- TODO: Handle missing commas between fields
+local function parse_object(tokens: sequence(Token), index: uinteger)
+  local obj: hashmap(string, JsonNode)
+  index = index + 1
+
+  while index ~= #tokens do
+    if tokens[index].type == TokenType.CLOSE_BRACE then
+      return JsonNode.new(JsonNodeType.OBJECT, obj)
+    end
+
+    if tokens[index].type ~= TokenType.STRING then
+      return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(tokens[index].type))
+    end 
+
+    local key = tokens[index].val
+    index = index + 1
+
+    if tokens[index].type ~= TokenType.COLON then
+      return false, (@JsonNode)({}), ("Expected `COLON`, got `%s`"):format(token_type_tostring(tokens[index].type))
+    end 
+    index = index + 1
+
+    if tokens[index].type == TokenType.CLOSE_BRACE then
+      return false, (@JsonNode)({}), ("Expected value, got `%s`"):format(token_type_tostring(tokens[index].type))
+    end
+
+    local ok, val, err = parse_value(tokens, index)
+
+    if not ok then
+      return ok, (@JsonNode)({}), err
+    end
+
+    obj[key] = val
+
+    index = index + 1
+
+    if tokens[index].type == TokenType.COMMA then
+      index = index + 1
+      if tokens[index].type == TokenType.CLOSE_BRACE then
+        return false, (@JsonNode)({}), "Trailing comma"
+      end
+    end
+
+  end
+
+  return false, (@JsonNode)({}), "Unclosed object"
+end
+
+function parse_value(tokens: sequence(Token), index: uinteger)
+
+  local ok: boolean
+  local node: JsonNode
+  local err: string
+
+  local token = tokens[index]
+  if token.type == TokenType.OPEN_BRACE then
+    ok, node, err = parse_object(tokens, index)
+  elseif token.type == TokenType.STRING then
+    ok, node, err = JsonNode.new(JsonNodeType.STRING, token.val)
+  elseif token.type == TokenType.NUMBER then
+    ok, node, err = JsonNode.new(JsonNodeType.NUMBER, token.val)
+  else
+    return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(tokens[index].type))
+  end
+  return ok, node, err
+end
+
+local function parse(content: string)
+  local ok, tokens, err = tokenize(content)
+
+  -- for _, token in ipairs(tokens) do
+    -- print(token.val, token_type_tostring(token.type))
+  -- end
+
+  if not ok then
+    return ok, (@JsonNode)({}), err
+  end
+
+  local ok, node, err = parse_value(tokens, 1)
+
+  if not ok then
+    return false, (@JsonNode)({}), err
+  end
+
+  return true, node, ""
+end
+
+-- local file, err = io.open("test.json")
+
+-- assert(file:isopen(), ("Failed to open file: %s"):format(err))
+
+-- local content, err = file:read("a")
+
+-- assert(err == "", err)
+
+local content = [[
+  {
+    "properties": {
+      "test": 6.02e-23,
+      "test2": {
+        "test3": 11
+      }
+    }
+  }
+]]
+
+local ok, node, err = parse(content)
+
 
 assert(ok, err)
 
-for _, token in ipairs(tokens) do
-  print(token.val, token_type_tostring(token.type))
-end
+-- print(node.val.obj["properties"].val.obj["test"].val.num)
+-- print(node.val.obj["properties"].val.obj["test2"].val.obj["test3"].val.num)
+
+
