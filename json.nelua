@@ -224,7 +224,7 @@ local JsonNode = @record{
   type: JsonNodeType
 }
 
-function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, sequence(JsonNode), hashmap(string, JsonNode)))
+function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
   local node: JsonNode = {}
   node.type = node_type
 
@@ -235,7 +235,7 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean,
   --   print()
   -- ]]
   -- 
-    ## print(value.type)
+  -- ## print(value.type)
 
   ## if value.type.is_string then
     if node_type == JsonNodeType.NUMBER then
@@ -252,48 +252,73 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean,
   return false, (@JsonNode)({}), ("Invalid node type: `%d`"):format(node_type)
 end
 
-local parse_value: function(tokens: sequence(Token), index: uinteger): (boolean, JsonNode, string)
+local Parser = @record{
+  content: string,
+  tokens: sequence(Token),
+  index: uinteger
+}
+
+function Parser.new(content: string): (boolean, Parser, string)
+  local ok, tokens, err = tokenize(content)
+
+  if not ok then
+    return false, (@Parser)(), err
+  end
+
+  local parser: Parser
+
+  parser.content = content
+  parser.tokens = tokens
+  parser.index = 1
+
+  return true, parser, ""
+end
+
+local Parser.parse: function(self: Parser): (boolean, JsonNode, string)
 
 -- TODO: Properly show errors on trailing commas
 -- TODO: Handle missing commas between fields
-local function parse_object(tokens: sequence(Token), index: uinteger)
+function Parser:parse_object(): (boolean, JsonNode, string)
   local obj: hashmap(string, JsonNode)
-  index = index + 1
+  self.index = self.index + 1 -- Skip opening brace
 
-  while index ~= #tokens do
-    if tokens[index].type == TokenType.CLOSE_BRACE then
+  while self.index ~= #self.tokens do
+    -- Handle empty object
+    if self.tokens[self.index].type == TokenType.CLOSE_BRACE then
       return JsonNode.new(JsonNodeType.OBJECT, obj)
     end
 
-    if tokens[index].type ~= TokenType.STRING then
-      return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(tokens[index].type))
+    -- Expect Key
+    if self.tokens[self.index].type ~= TokenType.STRING then
+      return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(self.tokens[self.index].type))
     end 
 
-    local key = tokens[index].val
-    index = index + 1
+    local key = self.tokens[self.index].val
+    self.index = self.index + 1
 
-    if tokens[index].type ~= TokenType.COLON then
-      return false, (@JsonNode)({}), ("Expected `COLON`, got `%s`"):format(token_type_tostring(tokens[index].type))
+    -- Expect colon
+    if self.tokens[self.index].type ~= TokenType.COLON then
+      return false, (@JsonNode)({}), ("Expected `COLON`, got `%s`"):format(token_type_tostring(self.tokens[self.index].type))
     end 
-    index = index + 1
+    self.index = self.index + 1
 
-    if tokens[index].type == TokenType.CLOSE_BRACE then
-      return false, (@JsonNode)({}), ("Expected value, got `%s`"):format(token_type_tostring(tokens[index].type))
+    -- Expect value after colon
+    if self.tokens[self.index].type == TokenType.CLOSE_BRACE then
+      return false, (@JsonNode)({}), ("Expected value, got `%s`"):format(token_type_tostring(self.tokens[self.index].type))
     end
 
-    local ok, val, err = parse_value(tokens, index)
+    local ok, val, err = self:parse()
 
     if not ok then
       return ok, (@JsonNode)({}), err
     end
 
     obj[key] = val
-
-    index = index + 1
-
-    if tokens[index].type == TokenType.COMMA then
-      index = index + 1
-      if tokens[index].type == TokenType.CLOSE_BRACE then
+    self.index = self.index + 1
+    
+    if self.tokens[self.index].type == TokenType.COMMA then
+      self.index = self.index + 1
+      if self.tokens[self.index].type == TokenType.CLOSE_BRACE then
         return false, (@JsonNode)({}), "Trailing comma"
       end
     end
@@ -303,43 +328,18 @@ local function parse_object(tokens: sequence(Token), index: uinteger)
   return false, (@JsonNode)({}), "Unclosed object"
 end
 
-function parse_value(tokens: sequence(Token), index: uinteger)
-
-  local ok: boolean
-  local node: JsonNode
-  local err: string
-
-  local token = tokens[index]
-  if token.type == TokenType.OPEN_BRACE then
-    ok, node, err = parse_object(tokens, index)
-  elseif token.type == TokenType.STRING then
-    ok, node, err = JsonNode.new(JsonNodeType.STRING, token.val)
-  elseif token.type == TokenType.NUMBER then
-    ok, node, err = JsonNode.new(JsonNodeType.NUMBER, token.val)
-  else
-    return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(tokens[index].type))
+Parser.parse = function(self: Parser): (boolean, JsonNode, string)
+  local token = self.tokens[self.index]
+  switch token.type do
+    case TokenType.OPEN_BRACE then
+      return self:parse_object()
+    case TokenType.STRING then
+      return JsonNode.new(JsonNodeType.STRING, token.val)
+    case TokenType.NUMBER then
+      return JsonNode.new(JsonNodeType.NUMBER, token.val)
+    else
+      return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(token.type))
   end
-  return ok, node, err
-end
-
-local function parse(content: string)
-  local ok, tokens, err = tokenize(content)
-
-  -- for _, token in ipairs(tokens) do
-    -- print(token.val, token_type_tostring(token.type))
-  -- end
-
-  if not ok then
-    return ok, (@JsonNode)({}), err
-  end
-
-  local ok, node, err = parse_value(tokens, 1)
-
-  if not ok then
-    return false, (@JsonNode)({}), err
-  end
-
-  return true, node, ""
 end
 
 -- local file, err = io.open("test.json")
@@ -361,12 +361,16 @@ local content = [[
   }
 ]]
 
-local ok, node, err = parse(content)
+local ok, parser, err = Parser.new(content)
+
+assert(ok, err)
+
+local ok, node, err = parser:parse()
 
 
 assert(ok, err)
 
--- print(node.val.obj["properties"].val.obj["test"].val.num)
--- print(node.val.obj["properties"].val.obj["test2"].val.obj["test3"].val.num)
+print(node.val.obj["properties"].val.obj["test"].val.num)
+print(node.val.obj["properties"].val.obj["test2"].val.obj["test3"].val.num)
 
 
