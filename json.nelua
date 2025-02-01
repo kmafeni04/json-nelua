@@ -228,29 +228,38 @@ local JsonNode = @record{
   type: JsonNodeType
 }
 
-function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
+function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, number, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
   local node: JsonNode = {}
   node.type = node_type
 
-  -- ##[[
-  --   for k, v in pairs(value.type) do
-  --     print(k, v)
-  --   end
-  --   print()
-  -- ]]
-  -- 
-  -- ## print(value.type)
-
-  ## if value.type.is_string then
-    if node_type == JsonNodeType.NUMBER then
+  ## if value.type.is_niltype then
+    if node_type == JsonNodeType.NULL then
+      node.val.null = (@niltype)() -- Initialize with niltype value
+      return true, node, ""
+    end
+  ## elseif value.type.is_boolean then
+    if node_type == JsonNodeType.BOOLEAN then
+      node.val.bol = value
+      return true, node, ""
+    end
+  ## elseif value.type.is_string then
+    if node_type == JsonNodeType.STRING then
+      node.val.str = value
+      return true, node, ""
+    elseif node_type == JsonNodeType.NUMBER then
       node.val.num = tonumber(value)
       return true, node, ""
     end
-    node.val.str = value
-    return true, node, ""
+  ## elseif value.type.is_sequence then
+    if node_type == JsonNodeType.ARRAY then
+      node.val.arr = value
+      return true, node, ""
+    end
   ## elseif value.type.is_hashmap then
-    node.val.obj = value
-    return true, node, ""
+    if node_type == JsonNodeType.OBJECT then
+      node.val.obj = value
+      return true, node, ""
+    end
   ## end
 
   return false, (@JsonNode)({}), ("Invalid node type: `%d`"):format(node_type)
@@ -321,33 +330,48 @@ Parser.parse_from_token = function(self:Parser, token: Token)
     case TokenType.OPEN_BRACE then
       return self:parse_object()
     case TokenType.STRING then
-      return JsonNode.new(JsonNodeType.STRING, token.val)
+      local val = token.val
+      self:advance() -- consume the token
+      return JsonNode.new(JsonNodeType.STRING, val)
     case TokenType.NUMBER then
-      return JsonNode.new(JsonNodeType.NUMBER, token.val)
+      local val = token.val
+      self:advance() -- consume the token
+      return JsonNode.new(JsonNodeType.NUMBER, val)
+    case TokenType.NULL then
+      self:advance() -- consume the token
+      return JsonNode.new(JsonNodeType.NULL, (@niltype)()) -- Pass niltype value
+    case TokenType.TRUE then
+      self:advance() -- consume the token
+      return JsonNode.new(JsonNodeType.BOOLEAN, true)
+    case TokenType.FALSE then
+      self:advance() -- consume the token
+      return JsonNode.new(JsonNodeType.BOOLEAN, false)
     else
       return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(token.type))
   end
-    return false, (@JsonNode)({}), ("Unknown Token: `%s`"):format(token_type_tostring(token.type))
 end
 
 -- TODO: Properly show errors on trailing commas
 -- TODO: Handle missing commas between fields
 Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
   local obj: hashmap(string, JsonNode)
+  if self:peek().type ~= TokenType.OPEN_BRACE then
+    return false, (@JsonNode)({}), ("Expected `OPEN_BRACE`, got `%s`"):format(token_type_tostring(self:peek().type))
+  end
   self:advance()
 
-  while self:peek().type ~= TokenType.CLOSE_BRACE do
+  if self:peek().type == TokenType.CLOSE_BRACE then
+    self:advance() 
+    return JsonNode.new(JsonNodeType.OBJECT, obj)
+  end
 
-    if self:peek().type == TokenType.EOF then
-      return false, (@JsonNode)({}), "Unclosed object"
-    end
-
+  while true do
     -- Expect Key
     if self:peek().type ~= TokenType.STRING then
       return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(self:peek().type))
     end 
-
-    local key = self:advance().val
+    local key = self:peek().val
+    self:advance()
 
     -- Expect colon
     if self:peek().type ~= TokenType.COLON then
@@ -355,31 +379,26 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
     end 
     self:advance()
 
-    print(self:peek().val)
     local ok, val, err = self:parse_from_token(self:peek())
-
     if not ok then
       return ok, (@JsonNode)({}), err
     end
 
     obj[key] = val
-    self:advance()
-
-    -- print(self.tokens[self.index].val)
-    local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACE)
-
-    if not ok then
-      return ok, (@JsonNode)({}), err
+    if self:peek().type == TokenType.CLOSE_BRACE then
+      self:advance() 
+      break
+    elseif self:peek().type ~= TokenType.COMMA then
+      return false, (@JsonNode)({}), ("Expected `COMMA` or `CLOSE_BRACE`, got `%s`"):format(token_type_tostring(self:peek().type))
     end
-
+    self:advance() 
   end
 
   return JsonNode.new(JsonNodeType.OBJECT, obj)
 end
 
 function Parser:parse(): (boolean, JsonNode, string)
-  local token = self:advance()
-  return self:parse_from_token(token)
+  return self:parse_from_token(self:peek())
 end
 
 -- local file, err = io.open("test.json")
@@ -406,5 +425,3 @@ local ok, node, err = parser:parse()
 
 
 assert(ok, err)
-
-
