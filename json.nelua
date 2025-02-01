@@ -549,7 +549,7 @@ local function pretty_print(node: JsonNode, indent: integer)
     else
       io.write("\"<unknown>\"")
   end
+  io.write("\n")
 end
 
 pretty_print(node, 0)
-io.write("\n")
