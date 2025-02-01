@@ -83,6 +83,11 @@ local function token_type_tostring(ttype: TokenType)
   end
 end
 
+-- Define a helper that increments an integer via its pointer.
+local function advance_index_ptr(p: *integer)
+  $p = $p + 1
+end
+
 local function tokenize(str: string)
   local tokens:sequence(Token)
   local index = 1
@@ -91,23 +96,23 @@ local function tokenize(str: string)
     local current_char = str:sub(index, index)
     if current_char == "[" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)  -- increment index
     elseif current_char == "]" then
       tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)
     elseif current_char == "{" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACE, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)
     elseif current_char == "}" then
       tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)
     elseif current_char:match("[%a_]") then
       local s_pos = index
       local val = current_char
-      index = index + 1
+      advance_index_ptr(&index)
       while index <= #str and str:sub(index, index):match("[%w_]") do
         val = val .. str:sub(index, index)
-        index = index + 1
+        advance_index_ptr(&index)
       end
       if val == "null" then
         tokens:push({ val = val, type = TokenType.NULL, start_pos = s_pos, end_pos = index - 1 })
@@ -121,48 +126,44 @@ local function tokenize(str: string)
     elseif current_char == '"' then
       local s_pos = index
       local val = ""
-      index = index + 1
+      advance_index_ptr(&index)  -- skip the starting "
       while index <= #str and str:sub(index, index) ~= '"' do
         local ch = str:sub(index, index)
         if ch == "\\" then
           local escape_seq = str:sub(index, index+1)
           val = val .. escape_seq
-          index = index + 2
+          advance_index_ptr(&index)
+          advance_index_ptr(&index)
         else
           val = val .. ch
-          index = index + 1
+          advance_index_ptr(&index)
         end
       end
       val = unescape_str(val)
-      index = index + 1
+      advance_index_ptr(&index)  -- skip the ending "
       tokens:push({ val = val, type = TokenType.STRING, start_pos = s_pos, end_pos = index - 1 })
     elseif current_char:match("[%-%d]") then
       local s_pos = index
       local val = current_char
-      index = index + 1
+      advance_index_ptr(&index)
       local decimal = false
       local exponent = false
       local after_exp = false
       local err = false
       while index <= #str and str:sub(index, index):match("[%d%.eE%-%+]") do
         local next_char = str:sub(index, index)
-
         if next_char == "." then
-          if decimal then
-            err = true
-          end
+          if decimal then err = true end
           decimal = true
         elseif next_char:match("[eE]") then
-          if exponent then
-            err = true
-          end
+          if exponent then err = true end
           exponent = true
           after_exp = true
         elseif after_exp and not next_char:match("[%d]") and (next_char ~= "-" and next_char ~= "+") then
           err = true
         end
         val = val .. next_char
-        index = index + 1
+        advance_index_ptr(&index)
       end
       if current_char == "-" and #val == 1 then
         err = true
@@ -177,12 +178,12 @@ local function tokenize(str: string)
       end
     elseif current_char == "," then
       tokens:push({ val = current_char, type = TokenType.COMMA, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)
     elseif current_char == ":" then
       tokens:push({ val = current_char, type = TokenType.COLON, start_pos = index, end_pos = index })
-      index = index + 1
+      advance_index_ptr(&index)
     elseif current_char:match("%s") then
-      index = index + 1
+      advance_index_ptr(&index)
     else
       goto ERROR
     end
