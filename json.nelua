@@ -15,17 +15,17 @@ local function pos_to_line_char(pos: integer, content: string)
 end
 
 local function unescape_str(str: string)
-  str = str:gsub("\\n", "\n")  -- Newline  
-  str = str:gsub("\\r", "\r")  -- Carriage return  
-  str = str:gsub("\\t", "\t")  -- Tab  
-  str = str:gsub("\\b", "\b")  -- Backspace  
-  str = str:gsub("\\f", "\f")  -- Form Feed
-  str = str:gsub('\\"', '"') -- Double quote  
-  str = str:gsub("\\\\", "\\") -- Backslash  
-  str = str:gsub("\\/", "/") -- Forwardslash  
-  str = str:gsub("\\u(%x+)", function(h: string) -- Unicode characters
+  str = str:gsub("\\n", "\n") 
+  str = str:gsub("\\r", "\r")  
+  str = str:gsub("\\t", "\t")
+  str = str:gsub("\\b", "\b")
+  str = str:gsub("\\f", "\f")
+  str = str:gsub('\\"', '"')
+  str = str:gsub("\\\\", "\\")
+  str = str:gsub("\\/", "/")
+  str = str:gsub("\\u(%x+)", function(h: string)
     return utf8.char(tonumber(h, 16))  
-  end)  
+  end)
 
   return str
 end
@@ -87,59 +87,65 @@ local function tokenize(str: string)
   local tokens:sequence(Token)
   local index = 1
 
-  while index ~= #str do
+  while index <= #str do
     local current_char = str:sub(index, index)
     if current_char == "[" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char == "]" then
       tokens:push({ val = current_char, type = TokenType.CLOSE_BRACKET, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char == "{" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACE, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char == "}" then
       tokens:push({ val = current_char, type = TokenType.CLOSE_BRACE, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char:match("[%a_]") then
       local s_pos = index
       local val = current_char
-      while str:sub(index + 1, index + 1):match("[%w_]") do
-        val = val .. str:sub(index + 1, index + 1)
+      index = index + 1
+      while index <= #str and str:sub(index, index):match("[%w_]") do
+        val = val .. str:sub(index, index)
         index = index + 1
       end
       if val == "null" then
-        tokens:push({ val = val, type = TokenType.NULL, start_pos = s_pos, end_pos = index })
+        tokens:push({ val = val, type = TokenType.NULL, start_pos = s_pos, end_pos = index - 1 })
       elseif val == "false" then
-        tokens:push({ val = val, type = TokenType.FALSE, start_pos = s_pos, end_pos = index })
+        tokens:push({ val = val, type = TokenType.FALSE, start_pos = s_pos, end_pos = index - 1 })
       elseif val == "true" then
-        tokens:push({ val = val, type = TokenType.TRUE, start_pos = s_pos, end_pos = index })
+        tokens:push({ val = val, type = TokenType.TRUE, start_pos = s_pos, end_pos = index - 1 })
       else
         goto ERROR
       end
     elseif current_char == '"' then
       local s_pos = index
       local val = ""
-      while str:sub(index + 1, index + 1) ~= '"' do
-        if str:sub(index + 1, index + 1) == "\\" then
-          val = val .. "\\"
-          if str:sub(index + 2, index + 2) == '"' then
-            val = val .. '"'
-            index = index + 1
-          end
+      index = index + 1
+      while index <= #str and str:sub(index, index) ~= '"' do
+        local ch = str:sub(index, index)
+        if ch == "\\" then
+          local escape_seq = str:sub(index, index+1)
+          val = val .. escape_seq
+          index = index + 2
+        else
+          val = val .. ch
           index = index + 1
         end
-        val = val .. str:sub(index + 1, index + 1)
-        index = index + 1
       end
       val = unescape_str(val)
       index = index + 1
-      tokens:push({ val = val, type = TokenType.STRING, start_pos = s_pos, end_pos = index })
+      tokens:push({ val = val, type = TokenType.STRING, start_pos = s_pos, end_pos = index - 1 })
     elseif current_char:match("[%-%d]") then
       local s_pos = index
       local val = current_char
+      index = index + 1
       local decimal = false
       local exponent = false
       local after_exp = false
       local err = false
-      while str:sub(index + 1, index + 1):match("[%d%.eE%-%+]") do
-        local next_char = str:sub(index + 1, index + 1)
+      while index <= #str and str:sub(index, index):match("[%d%.eE%-%+]") do
+        local next_char = str:sub(index, index)
 
         if next_char == "." then
           if decimal then
@@ -152,10 +158,10 @@ local function tokenize(str: string)
           end
           exponent = true
           after_exp = true
-        elseif after_exp and next_char:match("[^%-%+%d]") then
+        elseif after_exp and not next_char:match("[%d]") and (next_char ~= "-" and next_char ~= "+") then
           err = true
         end
-        val = val .. str:sub(index + 1, index + 1)
+        val = val .. next_char
         index = index + 1
       end
       if current_char == "-" and #val == 1 then
@@ -167,17 +173,19 @@ local function tokenize(str: string)
       if err then
         goto ERROR
       else
-        tokens:push({ val = val, type = TokenType.NUMBER, start_pos = s_pos, end_pos = index })
+        tokens:push({ val = val, type = TokenType.NUMBER, start_pos = s_pos, end_pos = index - 1 })
       end
     elseif current_char == "," then
       tokens:push({ val = current_char, type = TokenType.COMMA, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char == ":" then
       tokens:push({ val = current_char, type = TokenType.COLON, start_pos = index, end_pos = index })
+      index = index + 1
     elseif current_char:match("%s") then
+      index = index + 1
     else
       goto ERROR
     end
-    index = index + 1
   end
 
   tokens:push({ val = "", type = TokenType.EOF, start_pos = #str + 1, end_pos = #str + 1 })
@@ -234,7 +242,7 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean,
 
   ## if value.type.is_niltype then
     if node_type == JsonNodeType.NULL then
-      node.val.null = (@niltype)() -- Initialize with niltype value
+      node.val.null = (@niltype)()
       return true, node, ""
     end
   ## elseif value.type.is_boolean then
@@ -282,34 +290,35 @@ function Parser.new(content: string): (boolean, Parser, string)
 
   parser.content = content
   parser.tokens = tokens
-  parser.index = 0
+  parser.index = 1
 
   return true, parser, ""
 end
 
 local Parser.parse_from_token: function(self: Parser, token: Token): (boolean, JsonNode, string)
 local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
+local Parser.parse_array: function(self: Parser):(boolean, JsonNode, string)
 
-function Parser:peek()
+function Parser:peek(): Token
   if self.index <= #self.tokens then
     return self.tokens[self.index]
   end
-  return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
+  return (@Token){ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 }
 end
 
 function Parser:peek_next(): Token
   if self.index + 1 <= #self.tokens then
-    return self.tokens[self.index]
+    return self.tokens[self.index + 1]
   end
-  return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
+  return (@Token){ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 }
 end
 
-function Parser:advance()
-  if self.index + 1 <= #self.tokens then
-    self.index = self.index + 1
+function Parser:advance(): Token
+  self.index = self.index + 1
+  if self.index <= #self.tokens then
     return self.tokens[self.index]
   end
-  return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
+  return (@Token){ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 }
 end
 
 function Parser:advance_comma_unless(ttype: TokenType): (boolean, Token, string)
@@ -329,26 +338,61 @@ Parser.parse_from_token = function(self:Parser, token: Token)
   switch token.type do
     case TokenType.OPEN_BRACE then
       return self:parse_object()
+    case TokenType.OPEN_BRACKET then
+      return self:parse_array()
     case TokenType.STRING then
       local val = token.val
-      self:advance() -- consume the token
+      self:advance()
       return JsonNode.new(JsonNodeType.STRING, val)
     case TokenType.NUMBER then
       local val = token.val
-      self:advance() -- consume the token
+      self:advance() 
       return JsonNode.new(JsonNodeType.NUMBER, val)
     case TokenType.NULL then
-      self:advance() -- consume the token
-      return JsonNode.new(JsonNodeType.NULL, (@niltype)()) -- Pass niltype value
+      self:advance() 
+      return JsonNode.new(JsonNodeType.NULL, (@niltype)())
     case TokenType.TRUE then
-      self:advance() -- consume the token
+      self:advance() 
       return JsonNode.new(JsonNodeType.BOOLEAN, true)
     case TokenType.FALSE then
-      self:advance() -- consume the token
+      self:advance() 
       return JsonNode.new(JsonNodeType.BOOLEAN, false)
     else
       return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(token.type))
   end
+end
+
+Parser.parse_array = function(self: Parser): (boolean, JsonNode, string)
+  local arr: sequence(JsonNode)
+  
+  if self:peek().type ~= TokenType.OPEN_BRACKET then
+    return false, (@JsonNode)({}), ("Expected `OPEN_BRACKET`, got `%s`"):format(token_type_tostring(self:peek().type))
+  end
+  self:advance()
+
+  if self:peek().type == TokenType.CLOSE_BRACKET then
+    self:advance()
+    return JsonNode.new(JsonNodeType.ARRAY, arr)
+  end
+
+  while true do
+    local ok, val, err = self:parse_from_token(self:peek())
+    if not ok then
+      return ok, (@JsonNode)({}), err
+    end
+    
+    arr:push(val)
+
+    if self:peek().type == TokenType.CLOSE_BRACKET then
+      self:advance()
+      break
+    elseif self:peek().type ~= TokenType.COMMA then
+      return false, (@JsonNode)({}), ("Expected `COMMA` or `CLOSE_BRACKET`, got `%s`"):format(token_type_tostring(self:peek().type))
+    end
+    self:advance()
+  end
+
+  return JsonNode.new(JsonNodeType.ARRAY, arr)
 end
 
 -- TODO: Properly show errors on trailing commas
@@ -365,34 +409,64 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
     return JsonNode.new(JsonNodeType.OBJECT, obj)
   end
 
-  while true do
-    -- Expect Key
-    if self:peek().type ~= TokenType.STRING then
-      return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(self:peek().type))
-    end 
-    local key = self:peek().val
-    self:advance()
-
-    -- Expect colon
-    if self:peek().type ~= TokenType.COLON then
-      return false, (@JsonNode)({}), ("Expected `COLON`, got `%s`"):format(token_type_tostring(self:peek().type))
-    end 
-    self:advance()
-
-    local ok, val, err = self:parse_from_token(self:peek())
-    if not ok then
-      return ok, (@JsonNode)({}), err
-    end
-
-    obj[key] = val
-    if self:peek().type == TokenType.CLOSE_BRACE then
-      self:advance() 
-      break
-    elseif self:peek().type ~= TokenType.COMMA then
-      return false, (@JsonNode)({}), ("Expected `COMMA` or `CLOSE_BRACE`, got `%s`"):format(token_type_tostring(self:peek().type))
-    end
-    self:advance() 
+  local current_token = self:peek()
+  if current_token.type ~= TokenType.STRING then
+    local line, char = pos_to_line_char(current_token.start_pos, self.content)
+    return false, (@JsonNode)({}), ("Expected object key `STRING` at line %d, character %d, got `%s`"):format(
+      line, char, token_type_tostring(current_token.type))
   end
+  local key = current_token.val
+  self:advance()
+
+  current_token = self:peek()
+  if current_token.type ~= TokenType.COLON then
+    local line, char = pos_to_line_char(current_token.start_pos, self.content)
+    return false, (@JsonNode)({}), ("Expected `COLON` after object key at line %d, character %d, got `%s`"):format(
+      line, char, token_type_tostring(current_token.type))
+  end
+  self:advance()
+
+  local ok, val, err = self:parse_from_token(self:peek())
+  if not ok then
+      return ok, (@JsonNode)({}), err
+  end
+  obj[key] = val
+
+  while true do
+    if self:peek().type == TokenType.COMMA then
+      self:advance()
+      if self:peek().type == TokenType.CLOSE_BRACE then
+        break
+      end
+
+      current_token = self:peek()
+      if current_token.type ~= TokenType.STRING then
+        local line, char = pos_to_line_char(current_token.start_pos, self.content)
+        return false, (@JsonNode)({}), ("Expected object key after COMMA at line %d, character %d, got `%s`"):format(
+          line, char, token_type_tostring(current_token.type))
+      end
+      key = current_token.val
+      self:advance()
+
+      current_token = self:peek()
+      if current_token.type ~= TokenType.COLON then
+        local line, char = pos_to_line_char(current_token.start_pos, self.content)
+        return false, (@JsonNode)({}), ("Expected `COLON` after object key at line %d, character %d, got `%s`"):format(
+          line, char, token_type_tostring(current_token.type))
+      end
+      self:advance()
+
+      local ok, val, err = self:parse_from_token(self:peek())
+      if not ok then
+        return ok, (@JsonNode)({}), err
+      end
+      obj[key] = val
+    else
+      break
+    end
+  end
+
+  self:advance()
 
   return JsonNode.new(JsonNodeType.OBJECT, obj)
 end
@@ -401,22 +475,11 @@ function Parser:parse(): (boolean, JsonNode, string)
   return self:parse_from_token(self:peek())
 end
 
--- local file, err = io.open("test.json")
-
--- assert(file:isopen(), ("Failed to open file: %s"):format(err))
-
--- local content, err = file:read("a")
-
--- assert(err == "", err)
-
-local content = [[
-  {
-    "properties": {
-      "lol": {}
-    }
-  }
-]]
-
+local file, err = io.open("test.json")
+assert(file:isopen(), ("Failed to open file: %s"):format(err))
+local content, err = file:read("a")
+assert(err == "", err)
+print(content)
 local ok, parser, err = Parser.new(content)
 
 assert(ok, err)
@@ -425,3 +488,68 @@ local ok, node, err = parser:parse()
 
 
 assert(ok, err)
+
+local function repeat_str(str: string, n: integer): string
+  local s = ""
+  for i=1,n do
+    s = s .. str
+  end
+  return s
+end
+
+local function pretty_print(node: JsonNode, indent: integer)
+  indent = indent or 0
+  local indent_str = repeat_str("  ", indent)
+
+  switch node.type do
+    case JsonNodeType.OBJECT then
+      io.write("{\n")
+      local first = true
+      for key, value in pairs(node.val.obj) do
+        if not first then
+          io.write(",\n")
+        end
+        first = false
+        io.write(indent_str .. "  \"" .. key .. "\": ")
+        pretty_print(value, indent + 1)
+      end
+      if not first then
+        io.write("\n")
+      end
+      io.write(indent_str .. "}")
+
+    case JsonNodeType.ARRAY then
+      io.write("[\n")
+      local first = true
+      for i, value in ipairs(node.val.arr) do
+        if not first then
+          io.write(",\n")
+        end
+        first = false
+        io.write(indent_str .. "  ")
+        pretty_print(value, indent + 1)
+      end
+      if not first then
+        io.write("\n")
+      end
+      io.write(indent_str .. "]")
+
+    case JsonNodeType.STRING then
+      io.write("\"" .. node.val.str .. "\"")
+
+    case JsonNodeType.NUMBER then
+      io.write(tostring(node.val.num))
+
+    case JsonNodeType.BOOLEAN then
+      io.write(tostring(node.val.bol))
+
+    case JsonNodeType.NULL then
+      io.write("null")
+
+    else
+      io.write("\"<unknown>\"")
+  end
+end
+
+pretty_print(node, 0)
+io.write("\n")
