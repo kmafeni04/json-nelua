@@ -475,20 +475,6 @@ function Parser:parse(): (boolean, JsonNode, string)
   return self:parse_from_token(self:peek())
 end
 
-local file, err = io.open("test.json")
-assert(file:isopen(), ("Failed to open file: %s"):format(err))
-local content, err = file:read("a")
-assert(err == "", err)
-print(content)
-local ok, parser, err = Parser.new(content)
-
-assert(ok, err)
-
-local ok, node, err = parser:parse()
-
-
-assert(ok, err)
-
 local function repeat_str(str: string, n: integer): string
   local s = ""
   for i=1,n do
@@ -552,4 +538,13 @@ local function pretty_print(node: JsonNode, indent: integer)
   io.write("\n")
 end
 
+local file, err = io.open("test.json")
+assert(file:isopen(), ("Failed to open file: %s"):format(err))
+local content, err = file:read("a")
+assert(err == "", err)
+print(content)
+local ok, parser, err = Parser.new(content)
+assert(ok, err)
+local ok, node, err = parser:parse()
+assert(ok, err)
 pretty_print(node, 0)
