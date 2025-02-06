@@ -1,6 +1,7 @@
 require "io"
 require "utf8"
 require "traits"
+require "allocators.default"
 
 local function pos_to_line_char(pos: integer, content: string)
   local s_line = 1
@@ -79,7 +80,7 @@ local function token_type_tostring(ttype: TokenType)
     case TokenType.EOF then
       return "EOF"
     else
-      return ("ERROR: unknown token type `%d`"):format(ttype)
+      return ("Unknown token type `%d`"):format(ttype)
   end
 end
 
@@ -87,7 +88,7 @@ local function tokenize(str: string)
   local tokens:sequence(Token)
   local index = 1
 
-  while index ~= #str do
+  while index <= #str do
     local current_char = str:sub(index, index)
     if current_char == "[" then
       tokens:push({ val = current_char, type = TokenType.OPEN_BRACKET, start_pos = index, end_pos = index })
@@ -186,7 +187,7 @@ local function tokenize(str: string)
   local content = str:sub(1, index)
   local current_char = content:sub(index, index)
   local line, char = pos_to_line_char(index, content)
-  return false, (@sequence(Token))({}), ("ERROR: Unknown token `%s` at line `%d`, character `%d`"):format(current_char, line, char)
+  return false, (@sequence(Token))({}), ("[%d:%d]: Unknown token `%s`"):format(line, char, current_char)
 end
 
 local JsonNodeType = @enum{
@@ -213,7 +214,7 @@ local function json_node_type_tostring(jntype: JsonNodeType)
   case JsonNodeType.OBJECT then
     return "OBJECT"
   end
-  return ("ERROR: unknown type `%s`"):format(jntype)
+  return ("Unknown type `%s`"):format(jntype)
 end
 
 local JsonNode = @record{
@@ -228,38 +229,40 @@ local JsonNode = @record{
   type: JsonNodeType
 }
 
-function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, boolean, string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
+function JsonNode.new(node_type: JsonNodeType, value: overload(string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
   local node: JsonNode = {}
   node.type = node_type
-
-  -- ##[[
-  --   for k, v in pairs(value.type) do
-  --     print(k, v)
-  --   end
-  --   print()
-  -- ]]
-  -- 
-  -- ## print(value.type)
 
   ## if value.type.is_string then
     if node_type == JsonNodeType.NUMBER then
       node.val.num = tonumber(value)
-      return true, node, ""
+    elseif node_type == JsonNodeType.BOOLEAN then
+      node.val.bol = true and value == "true" or false
+    elseif node_type == JsonNodeType.NULL then
+      node.val.null = nil
+    else
+      node.val.str = value
     end
-    node.val.str = value
     return true, node, ""
   ## elseif value.type.is_hashmap then
     node.val.obj = value
     return true, node, ""
+  ## elseif value.type.is_sequence then
+    node.val.arr = value
+    return true, node, ""
   ## end
 
-  return false, (@JsonNode)({}), ("Invalid node type: `%d`"):format(node_type)
+  return false, (@JsonNode)({}), ("Invalid node type `%d`"):format(node_type)
+end
+
+function JsonNode:is(node_type: JsonNodeType): boolean
+  return true and self.type == node_type or false
 end
 
 local Parser = @record{
   content: string,
   tokens: sequence(Token),
-  index: uinteger
+  index: *uinteger
 }
 
 function Parser.new(content: string): (boolean, Parser, string)
@@ -273,65 +276,82 @@ function Parser.new(content: string): (boolean, Parser, string)
 
   parser.content = content
   parser.tokens = tokens
-  parser.index = 0
+  parser.index = (@*uinteger)(default_allocator:alloc(#uinteger))
+  $(parser.index) = 1
 
   return true, parser, ""
 end
 
 local Parser.parse_from_token: function(self: Parser, token: Token): (boolean, JsonNode, string)
 local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
+local Parser.parse_array: function(self: Parser):(boolean, JsonNode, string)
 
 function Parser:peek()
-  if self.index <= #self.tokens then
-    return self.tokens[self.index]
+  local index = $(self.index) 
+  if index <= #self.tokens then
+    return self.tokens[index]
   end
   return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
 end
 
 function Parser:peek_next(): Token
-  if self.index + 1 <= #self.tokens then
-    return self.tokens[self.index]
+  local index = $(self.index) 
+  if index + 1 <= #self.tokens then
+    return self.tokens[index + 1]
   end
   return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
 end
 
 function Parser:advance()
-  if self.index + 1 <= #self.tokens then
-    self.index = self.index + 1
-    return self.tokens[self.index]
+  local index = self.index
+  if $index <= #self.tokens then
+    local current_token = self.tokens[$index]
+    $index = $index + 1
+    return current_token
   end
   return (@Token)({ val = "", type = TokenType.EOF, start_pos = #self.content + 1, end_pos = #self.content + 1 })
 end
 
 function Parser:advance_comma_unless(ttype: TokenType): (boolean, Token, string)
   if self:peek().type == TokenType.COMMA then
+      if self.tokens[$self.index + 1].type == ttype or self.tokens[$self.index + 1].type == TokenType.EOF then
+        local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+        return false, self:peek(), ("[%d:%d]: Trailing comma"):format(line, char)
+      end
     return true, self:advance(), ""
   end
 
-  if self:peek().type ~= ttype then
+  if self:peek().type ~= ttype and self:peek().type ~= TokenType.EOF then
     local ttype_str = token_type_tostring(self:peek().type)
-    return false, self:peek() ,("Expected `COMMA`, got `%s`"):format(ttype_str)
+    local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+    return false, self:peek() ,("[%d:%d]: Expected `COMMA`, got `%s`"):format(line, char, ttype_str)
   end
 
-  return true, self:advance() ,""
+  return true, self:peek() ,""
 end
 
 Parser.parse_from_token = function(self:Parser, token: Token)
   switch token.type do
     case TokenType.OPEN_BRACE then
       return self:parse_object()
+    case TokenType.OPEN_BRACKET then
+      return self:parse_array()
     case TokenType.STRING then
       return JsonNode.new(JsonNodeType.STRING, token.val)
     case TokenType.NUMBER then
       return JsonNode.new(JsonNodeType.NUMBER, token.val)
+    case TokenType.TRUE then
+      return JsonNode.new(JsonNodeType.BOOLEAN, token.val)
+    case TokenType.FALSE then
+      return JsonNode.new(JsonNodeType.BOOLEAN, token.val)
+    case TokenType.NULL then
+      return JsonNode.new(JsonNodeType.NULL, token.val)
     else
-      return false, (@JsonNode)({}), ("UNIMPLEMENTED: `%s`"):format(token_type_tostring(token.type))
+      return false, (@JsonNode)({}), ("UNREACHABLE: `%s`"):format(token_type_tostring(token.type))
   end
-    return false, (@JsonNode)({}), ("Unknown Token: `%s`"):format(token_type_tostring(token.type))
+    return false, (@JsonNode)({}), token_type_tostring(token.type)
 end
 
--- TODO: Properly show errors on trailing commas
--- TODO: Handle missing commas between fields
 Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
   local obj: hashmap(string, JsonNode)
   self:advance()
@@ -339,35 +359,45 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
   while self:peek().type ~= TokenType.CLOSE_BRACE do
 
     if self:peek().type == TokenType.EOF then
-      return false, (@JsonNode)({}), "Unclosed object"
+      local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+      return false, (@JsonNode)({}), ("[%d:%d]: Unclosed object"):format(line, char)
     end
 
     -- Expect Key
     if self:peek().type ~= TokenType.STRING then
-      return false, (@JsonNode)({}), ("Expected `STRING`, got `%s`"):format(token_type_tostring(self:peek().type))
+      local ttype = token_type_tostring(self:peek().type)
+      local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+      return false, (@JsonNode)({}), ("[%d:%d]: Expected `STRING`, got `%s`"):format(line, char, ttype)
     end 
 
-    local key = self:advance().val
+    local key = self:peek().val
+
+    -- Duplicate fields check
+    if obj:has(key) then
+      local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+      return false, (@JsonNode)({}), ("[%d:%d]: Duplicate field `%s`"):format(line, char, key)
+    end
+    self:advance()
 
     -- Expect colon
     if self:peek().type ~= TokenType.COLON then
-      return false, (@JsonNode)({}), ("Expected `COLON`, got `%s`"):format(token_type_tostring(self:peek().type))
+      local ttype = token_type_tostring(self:peek().type)
+      local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+      return false, (@JsonNode)({}), ("[%d:%d]: Expected `COLON`, got `%s`"):format(line, char, ttype)
     end 
     self:advance()
 
-    print(self:peek().val)
     local ok, val, err = self:parse_from_token(self:peek())
 
     if not ok then
       return ok, (@JsonNode)({}), err
     end
-
     obj[key] = val
     self:advance()
 
-    -- print(self.tokens[self.index].val)
-    local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACE)
 
+    local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACE)
+    
     if not ok then
       return ok, (@JsonNode)({}), err
     end
@@ -377,10 +407,41 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
   return JsonNode.new(JsonNodeType.OBJECT, obj)
 end
 
-function Parser:parse(): (boolean, JsonNode, string)
-  local token = self:advance()
-  return self:parse_from_token(token)
+Parser.parse_array = function(self: Parser): (boolean, JsonNode, string)
+  local arr: sequence(JsonNode)
+  self:advance()
+
+  while self:peek().type ~= TokenType.CLOSE_BRACKET do
+
+    if self:peek().type == TokenType.EOF then
+      local line, char = pos_to_line_char(self:peek().start_pos, self.content)
+      return false, (@JsonNode)({}), ("[%d:%d]: Unclosed array"):format(line, char)
+    end
+
+    local ok, val, err = self:parse_from_token(self:peek())
+
+    if not ok then
+      return ok, (@JsonNode)({}), err
+    end
+
+    arr:push(val)
+    self:advance()
+
+    local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACKET)
+    
+    if not ok then
+      return ok, (@JsonNode)({}), err
+    end
+
+  end
+
+  return JsonNode.new(JsonNodeType.ARRAY, arr)
 end
+
+function Parser:parse(): (boolean, JsonNode, string)
+  return self:parse_from_token(self:peek())
+end
+
 
 -- local file, err = io.open("test.json")
 
@@ -388,13 +449,11 @@ end
 
 -- local content, err = file:read("a")
 
--- assert(err == "", err)
+-- assert(err == "", "ERROR: " .. err)
 
 local content = [[
   {
-    "properties": {
-      "lol": {}
-    }
+    "name": "James"
   }
 ]]
 
@@ -404,7 +463,10 @@ assert(ok, err)
 
 local ok, node, err = parser:parse()
 
-
 assert(ok, err)
 
+node:get(JsonNodeType.OBJECT)
 
+local json = @record{}
+
+local json.Parser = Parser
