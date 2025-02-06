@@ -1,4 +1,5 @@
 {
+  "null": null,
   "string": "Hello, world!",
   "message": "Hello, \"world\"!\nWelcome to JSON.",
   "path": "C:\\Users\\John\\Documents",

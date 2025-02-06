@@ -201,8 +201,6 @@ local JsonNodeType = @enum{
 
 local function json_node_type_tostring(jntype: JsonNodeType)
   switch jntype do
-  case JsonNodeType.NULL then
-    return "NULL"
   case JsonNodeType.BOOLEAN then
     return "BOOLEAN"
   case JsonNodeType.STRING then
@@ -219,8 +217,7 @@ end
 
 local JsonNode = @record{
   val: union{
-    null: niltype,
-    bol: boolean,
+    bol: boolean, -- accounts for NULL
     str: string,
     num: number,
     arr: sequence(JsonNode),
@@ -229,7 +226,7 @@ local JsonNode = @record{
   type: JsonNodeType
 }
 
-function JsonNode.new(node_type: JsonNodeType, value: overload(string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
+function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, string, sequence(JsonNode), hashmap(string, JsonNode))): (boolean, JsonNode, string)
   local node: JsonNode = {}
   node.type = node_type
 
@@ -238,8 +235,6 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(string, sequence(
       node.val.num = tonumber(value)
     elseif node_type == JsonNodeType.BOOLEAN then
       node.val.bol = true and value == "true" or false
-    elseif node_type == JsonNodeType.NULL then
-      node.val.null = nil
     else
       node.val.str = value
     end
@@ -249,6 +244,9 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(string, sequence(
     return true, node, ""
   ## elseif value.type.is_sequence then
     node.val.arr = value
+    return true, node, ""
+  ## elseif value.type.is_niltype then
+    node.val.bol = false
     return true, node, ""
   ## end
 
@@ -276,7 +274,7 @@ function Parser.new(content: string): (boolean, Parser, string)
 
   parser.content = content
   parser.tokens = tokens
-  parser.index = (@*uinteger)(default_allocator:alloc(#uinteger))
+  parser.index = (@*uinteger)(new(uinteger))
   $(parser.index) = 1
 
   return true, parser, ""
@@ -345,7 +343,7 @@ Parser.parse_from_token = function(self:Parser, token: Token)
     case TokenType.FALSE then
       return JsonNode.new(JsonNodeType.BOOLEAN, token.val)
     case TokenType.NULL then
-      return JsonNode.new(JsonNodeType.NULL, token.val)
+      return JsonNode.new(JsonNodeType.NULL)
     else
       return false, (@JsonNode)({}), ("UNREACHABLE: `%s`"):format(token_type_tostring(token.type))
   end
@@ -442,20 +440,32 @@ function Parser:parse(): (boolean, JsonNode, string)
   return self:parse_from_token(self:peek())
 end
 
+-- TODO: Finish implementation
+function Parser:parse_as(rec: type): (boolean, #[rec.value]#, string)
+  ## static_assert(rec.value.is_record, "Parameter `rec` must be of type `record`")
+  ## static_assert(not rec.value.is_empty, "Parameter `rec` cannot be an empty record")
 
--- local file, err = io.open("test.json")
+  assert(false, "UNIMPLEMENTED")
 
--- assert(file:isopen(), ("Failed to open file: %s"):format(err))
+  local result: rec
 
--- local content, err = file:read("a")
+  return true, result, ""
+end
 
--- assert(err == "", "ERROR: " .. err)
 
-local content = [[
-  {
-    "name": "James"
-  }
-]]
+local file, err = io.open("test.json")
+
+assert(file:isopen(), ("Failed to open file: %s"):format(err))
+
+local content, err = file:read("a")
+
+assert(err == "", "ERROR: " .. err)
+
+-- local content = [[
+--   {
+--     "name": "James"
+--   }
+-- ]]
 
 local ok, parser, err = Parser.new(content)
 
@@ -464,8 +474,6 @@ assert(ok, err)
 local ok, node, err = parser:parse()
 
 assert(ok, err)
-
-node:get(JsonNodeType.OBJECT)
 
 local json = @record{}
 
