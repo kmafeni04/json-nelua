@@ -253,8 +253,57 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, string, 
   return false, (@JsonNode)({}), ("Invalid node type `%d`"):format(node_type)
 end
 
-function JsonNode:is(node_type: JsonNodeType): boolean
-  return true and self.type == node_type or false
+function JsonNode:is(): string
+  return json_node_type_tostring(self.type)
+end
+
+function JsonNode:is_obj(): boolean
+  return self.type == JsonNodeType.OBJECT
+end
+
+function JsonNode:is_num(): boolean
+  return self.type == JsonNodeType.NUMBER
+end
+
+function JsonNode:is_str(): boolean
+  return self.type == JsonNodeType.STRING
+end
+
+function JsonNode:is_arr(): boolean
+  return self.type == JsonNodeType.ARRAY
+end
+
+function JsonNode:is_bool(): boolean
+  return self.type == JsonNodeType.BOOLEAN
+end
+
+function JsonNode:is_null(): boolean
+  return self.type == JsonNodeType.NULL
+end
+
+
+function JsonNode:get_obj(): hashmap(string, JsonNode)
+  return self.val.obj
+end
+
+function JsonNode:get_num(): number
+  return self.val.num
+end
+
+function JsonNode:get_str(): string
+  return self.val.str
+end
+
+function JsonNode:get_arr(): sequence(JsonNode)
+  return self.val.arr
+end
+
+function JsonNode:get_bool(): boolean
+  return self.val.bol
+end
+
+function JsonNode:get_null(): boolean
+  return self.val.bol
 end
 
 local Parser = @record{
@@ -452,29 +501,88 @@ function Parser:parse_as(rec: type): (boolean, #[rec.value]#, string)
   return true, result, ""
 end
 
-
-local file, err = io.open("test.json")
-
-assert(file:isopen(), ("Failed to open file: %s"):format(err))
-
-local content, err = file:read("a")
-
-assert(err == "", "ERROR: " .. err)
-
--- local content = [[
---   {
---     "name": "James"
---   }
--- ]]
-
-local ok, parser, err = Parser.new(content)
-
-assert(ok, err)
-
-local ok, node, err = parser:parse()
-
-assert(ok, err)
-
 local json = @record{}
 
 local json.Parser = Parser
+
+function json.encode(rec: type)
+  ## static_assert(rec.type.is_record, "Parameter `rec` must be of type `record`")
+
+  ##[[
+    local function is_parseable(field_type)
+      if field_type.is_contiguous and not field_type.is_string then
+        if not is_parseable(field_type.subtype) then
+          return false
+        end
+        return true
+      elseif field_type.is_record and not (field_type.is_string or field_type.is_container) then
+        for _, field in pairs(field_type.fields) do
+          if not is_parseable(field.type) then
+            return false
+          end
+          return true
+        end
+      
+      elseif field_type.is_string then
+        return true
+      elseif field_type.is_scalar and not field_type.is_enum then
+        return true
+      elseif field_type.is_boolean then
+        return true
+      elseif field_type.is_niltype then
+        return true
+      end
+      return false
+    end
+  ]]
+
+  local sb: stringbuilder
+  sb:write("{")
+
+  local index = 0
+  local rec_len = #[#rec.type.fields]#
+  ## for _, field in ipairs(rec.type.fields) do
+    ## static_assert(is_parseable(field.type), ("Can not parse record to JSON, unsupported type `%s`"):format(tostring(field.type)))
+
+    sb:writef('"%s": ', #[field.name]#)
+
+    --TODO: Rework to handle nested arrays
+    ## if field.type.is_contiguous and not field.type.is_string then
+      sb:write("[")
+        local i = 0 
+        for _, v in ipairs(rec.#|field.name|#) do
+          sb:write(tostring(v))
+          sb:write(", ")
+          i = i + 1
+        end
+        if i > 0 then
+          sb:rollback(2)
+        end
+      sb:write("]")
+    ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
+      sb:write(json.encode(rec.#|field.name|#))
+    ## elseif field.type.is_scalar then
+      sb:write(rec.#|field.name|#)
+    ## elseif field.type.is_string then
+      sb:write('"')
+      sb:write(rec.#|field.name|#)
+      sb:write('"')
+    ## elseif field.type.is_boolean then
+      sb:write(rec.#|field.name|#)
+    ## elseif field.type.is_niltype then
+      sb:write("null")
+    ## else
+      ## print(field.name, field.type)
+      ## static_assert(false, "UNIMPLEMENTED")
+    ## end
+
+    sb:write(", ")
+    index = index + 1
+  ## end
+  if 0 < index and index >= rec_len then
+    sb:rollback(2)
+  end
+
+  sb:write("}")
+  return sb:promote()
+end
