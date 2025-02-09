@@ -1,0 +1,15 @@
+local json = require "..json"
+
+-- Tests Expected to pass
+do
+  local Rec = @record{
+    name: string
+  }
+
+  local rec: Rec
+  rec.name = "John"
+
+  local result = json.write_record(rec)
+
+  assert(result == '{"name": "John"}')
+end

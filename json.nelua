@@ -112,12 +112,25 @@ local function tokenize(str: string)
       elseif val == "true" then
         tokens:push({ val = val, type = TokenType.TRUE, start_pos = s_pos, end_pos = index })
       else
-        goto ERROR
+        local content = str:sub(1, index)
+        local current_token = content:sub(s_pos, index)
+        local line, char = pos_to_line_char(s_pos, content)
+        return false, (@sequence(Token))({}), ("[%d:%d]: Unknown token `%s`"):format(line, char, current_token)
       end
     elseif current_char == '"' then
       local s_pos = index
       local val = ""
       while str:sub(index + 1, index + 1) ~= '"' do
+        if index >= #str then
+          local content = str:sub(1, index)
+          local line, char = pos_to_line_char(s_pos, content)
+          return false, (@sequence(Token))({}), ("[%d:%d]: Unexpected end of file"):format(line, char)
+        end
+        if str:sub(index + 1, index + 1) == "\n" then
+          local content = str:sub(1, index)
+          local line, char = pos_to_line_char(s_pos, content)
+          return false, (@sequence(Token))({}), ("[%d:%d]: Multiline strings are not allowed"):format(line, char)
+        end
         if str:sub(index + 1, index + 1) == "\\" then
           val = val .. "\\"
           if str:sub(index + 2, index + 2) == '"' then
@@ -166,7 +179,10 @@ local function tokenize(str: string)
         err = true
       end
       if err then
-        goto ERROR
+        local content = str:sub(1, index)
+        local current_token = content:sub(s_pos, index)
+        local line, char = pos_to_line_char(s_pos, content)
+        return false, (@sequence(Token))({}), ("[%d:%d]: Unknown token `%s`"):format(line, char, current_token)
       else
         tokens:push({ val = val, type = TokenType.NUMBER, start_pos = s_pos, end_pos = index })
       end
@@ -176,18 +192,16 @@ local function tokenize(str: string)
       tokens:push({ val = current_char, type = TokenType.COLON, start_pos = index, end_pos = index })
     elseif current_char:match("%s") then
     else
-      goto ERROR
+      local content = str:sub(1, index)
+      local current_char = content:sub(index, index)
+      local line, char = pos_to_line_char(index, content)
+      return false, (@sequence(Token))({}), ("[%d:%d]: Unknown token `%s`"):format(line, char, current_char)
     end
     index = index + 1
   end
 
   tokens:push({ val = "", type = TokenType.EOF, start_pos = #str + 1, end_pos = #str + 1 })
   return true, tokens, ""
-  ::ERROR::
-  local content = str:sub(1, index)
-  local current_char = content:sub(index, index)
-  local line, char = pos_to_line_char(index, content)
-  return false, (@sequence(Token))({}), ("[%d:%d]: Unknown token `%s`"):format(line, char, current_char)
 end
 
 local JsonNodeType = @enum{
@@ -504,7 +518,29 @@ end
 
 local json = @record{}
 
-local json.Parser = Parser
+function json.parse_from_file(file_path: string): (boolean, JsonNode, string)
+  local content_file, err = io.open(file_path)
+
+  if err ~= "" then
+    return false, (@JsonNode)(), err
+  end
+
+  local content = content_file:read("a")
+
+  local ok, parser, err = Parser.new(content)
+  if not ok then
+    return ok, (@JsonNode)(), err
+  end
+  return parser:parse()
+end
+
+function json.parse_from_string(content: string): (boolean, JsonNode, string)
+  local ok, parser, err = Parser.new(content)
+  if not ok then
+    return ok, (@JsonNode)(), err
+  end
+  return parser:parse()
+end
 
 ##[[
   local function is_parseable(field_type)

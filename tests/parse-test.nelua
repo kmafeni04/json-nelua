@@ -1,1 +1,41 @@
+local json = require "..json"
 
+-- Tests exoected to pass
+do
+  local content = [[
+    {
+      "name": "lol"
+    }
+  ]]
+
+  local ok, node, err = json.parse_from_string(content)
+
+  assert(ok, err)
+end
+
+do
+  local ok, node, err = json.parse_from_file("test-files/test.json")
+
+  assert(ok, err)
+end
+
+-- Tests expected to fail
+do
+  local content = [[
+    {
+      "name": "lol",
+    }
+  ]]
+
+  local ok, node, err = json.parse_from_string(content)
+
+  assert(not ok, "Test should to fail with `Trailing comma`")
+end
+
+do
+  local content = '{"name": "lol}'
+
+  local ok, node, err = json.parse_from_string(content)
+
+  assert(not ok, "Test should to fail with `Unexpected end of file`")
+end
