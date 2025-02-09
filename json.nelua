@@ -329,6 +329,7 @@ function Parser.new(content: string): (boolean, Parser, string)
   return true, parser, ""
 end
 
+-- Forward declare mutually called functions
 local Parser.parse_from_token: function(self: Parser, token: Token): (boolean, JsonNode, string)
 local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
 local Parser.parse_array: function(self: Parser):(boolean, JsonNode, string)
@@ -596,3 +597,5 @@ function json.write_record(rec: auto)
   sb:write("}")
   return sb:promote()
 end
+
+return json
