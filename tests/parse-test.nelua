@@ -4,19 +4,47 @@ local json = require "..json"
 do
   local content = [[
     {
-      "name": "lol"
+      "name": "John"
     }
   ]]
 
   local ok, node, err = json.parse_from_string(content)
 
   assert(ok, err)
+
+  assert(node:is_obj())
+
+  assert(node:get_obj()["name"]:get_str() == "John")
+end
+
+do
+  local content = [[
+    {
+      "arr": [1, 2, 3, 4]
+    }
+  ]]
+
+  local ok, node, err = json.parse_from_string(content)
+
+  assert(ok, err)
+
+  assert(node:is_obj())
+
+  assert(node:get_obj()["arr"]:get_arr()[1]:get_num() == 1)
+
+  assert(node:get_obj()["arr"]:get_arr()[4]:get_num() == 4)
 end
 
 do
   local ok, node, err = json.parse_from_file("test-files/test.json")
 
   assert(ok, err)
+
+  assert(node:is_obj())
+
+  assert(node:get_obj()["string"]:get_str() == "Hello, world!")
+
+  assert(node:get_obj()["object"]:get_obj()["nested_object"]:get_obj()["inner_key"]:get_str() == "inner_value")
 end
 
 -- Tests expected to fail

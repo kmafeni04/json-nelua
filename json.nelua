@@ -248,7 +248,7 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, string, 
     if node_type == JsonNodeType.NUMBER then
       node.val.num = tonumber(value)
     elseif node_type == JsonNodeType.BOOLEAN then
-      node.val.bol = true and value == "true" or false
+      node.val.bol = value == "true"
     else
       node.val.str = value
     end
@@ -343,6 +343,12 @@ function Parser.new(content: string): (boolean, Parser, string)
   return true, parser, ""
 end
 
+function Parser:destroy()
+  delete(self.index)
+  self.tokens:destroy()
+  $self = (@Parser)()
+end
+
 -- Forward declare mutually called functions
 local Parser.parse_from_token: function(self: Parser, token: Token): (boolean, JsonNode, string)
 local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
@@ -392,7 +398,7 @@ function Parser:advance_comma_unless(ttype: TokenType): (boolean, Token, string)
   return true, self:peek() ,""
 end
 
-Parser.parse_from_token = function(self:Parser, token: Token)
+Parser.parse_from_token = function(self:Parser, token: Token): (boolean, JsonNode, string)
   switch token.type do
     case TokenType.OPEN_BRACE then
       return self:parse_object()
@@ -531,7 +537,9 @@ function json.parse_from_file(file_path: string): (boolean, JsonNode, string)
   if not ok then
     return ok, (@JsonNode)(), err
   end
-  return parser:parse()
+  local ok, node, err = parser:parse()
+  parser:destroy()
+  return ok, node, err
 end
 
 function json.parse_from_string(content: string): (boolean, JsonNode, string)
@@ -539,10 +547,13 @@ function json.parse_from_string(content: string): (boolean, JsonNode, string)
   if not ok then
     return ok, (@JsonNode)(), err
   end
-  return parser:parse()
+  local ok, node, err = parser:parse()
+  parser:destroy()
+  return ok, node, err
 end
 
 ##[[
+  ---@return boolean
   local function is_parseable(field_type)
     if field_type.is_contiguous and not field_type.is_string then
       return is_parseable(field_type.subtype)
@@ -596,7 +607,7 @@ local function array_tostring(arr: auto): string
   return sb:promote()
 end
 
-function json.serialize_record(rec: auto)
+function json.serialize_record(rec: auto): string
   ## static_assert(rec.type.is_record, "Parameter `rec` must be of type `record`")
 
   local sb: stringbuilder
