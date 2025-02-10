@@ -596,7 +596,7 @@ local function array_tostring(arr: auto): string
   return sb:promote()
 end
 
-function json.write_record(rec: auto)
+function json.serialize_record(rec: auto)
   ## static_assert(rec.type.is_record, "Parameter `rec` must be of type `record`")
 
   local sb: stringbuilder
@@ -612,7 +612,7 @@ function json.write_record(rec: auto)
     ## if field.type.is_contiguous and not field.type.is_string then
       sb:write(array_tostring(rec.#|field.name|#))
     ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
-      sb:write(json.write_record(rec.#|field.name|#))
+      sb:write(json.serialize_record(rec.#|field.name|#))
     ## elseif field.type.is_string then
       sb:write('"')
       sb:write(rec.#|field.name|#)

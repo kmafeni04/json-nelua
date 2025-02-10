@@ -9,7 +9,7 @@ do
   local rec: Rec
   rec.name = "John"
 
-  local result = json.write_record(rec)
+  local result = json.serialize_record(rec)
 
   assert(result == '{"name": "John"}')
 end
