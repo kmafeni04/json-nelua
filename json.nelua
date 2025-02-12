@@ -568,6 +568,10 @@ function json.parse_string_to_record(content: string, rec: type): (boolean, #[re
     return ok, (@rec)(), err
   end
 
+  defer
+    parser:destroy()
+  end
+
   local ok, node, err = parser:parse()
   if not ok then
     return ok, (@rec)(), err
@@ -576,6 +580,7 @@ function json.parse_string_to_record(content: string, rec: type): (boolean, #[re
   if not node:is_obj() then
     return false, (@rec)(), "Node is not an object and can not be parsed to a record"
   end
+
   local function traverse_array(arr: auto, T: type): (boolean, #[T.value]#, string)
     local sub_result: T
     ## local sub_type = T.value.subtype
