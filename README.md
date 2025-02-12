@@ -1,187 +1,264 @@
 # json.nelua
 
-JSON library for [nelua](https://nelua.io)
+A JSON library for the [nelua](https://nelua.io) programming language.
+
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [API Reference](#api-reference)
+  - [Parsing Functions](#parsing-functions)
+  - [Node Operations](#node-operations)
+  - [Serialization](#serialization)
+- [Error Handling](#error-handling)
+- [Development](#development)
 
 ## Features
+- Parse JSON strings and files into native nelua data structures
+- Serialize compatible records into JSON strings
+- Parsing directly into nelua records
+- Comprehensive error handling
+- Support for all standard JSON types:
+  - Objects (key-value pairs)
+  - Arrays
+  - Strings
+  - Numbers
+  - Booleans
+  - Null
 
-- Parse JSON into native nelua data structures
-- Serialize compatible records into JSON strings.
+## Quick Start
+
+```lua
+local json = require "path.to.json"
+
+-- Parse JSON directly into a record
+local User = @record{
+  name: string,
+  age: integer,
+  scores: sequence(number)
+}
+
+local json_str = [[
+{
+  "name": "John",
+  "age": 30,
+  "scores": [95.5, 88.0, 92.5]
+}
+]]
+
+local ok, user, err = json.parse_string_to_record(json_str, User)
+if not ok then
+  print("Failed to parse:", err)
+  return
+end
+
+print(user.name)    --> prints "John"
+print(user.age)     --> prints 30
+print(user.scores[1]) --> prints 95.5
+```
 
 ## Installation
 
-Simply copy over the json.nelua file into your project and require it
+### Setup
+1. Copy the `json.nelua` file into your project
+2. Require the library:
 ```lua
 local json = require "path.to.json"
 ```
 
-## API
+## API Reference
 
-This section details the functions exposed by the library along with usage examples.
+### Parsing Functions
 
-### Parsing
-
-This section covers functions related to parsing JSON into internal data structures.
-
-#### json.parse_file(file_path)
-
-This function takes a file path as its argument and returns an ok `boolean`, the `JsonNode`, and an error `string` 
+#### json.parse_file(file_path: string): (boolean, JsonNode, string)
+Parses a JSON file into a JsonNode structure.
 
 ```lua
-local ok, node, err = json.parse_file("test.json")
+local json = require "path.to.json"
 
-assert(ok, err)
+local ok, node, err = json.parse_file("config.json")
+if not ok then
+  print("Parse error:", err)
+  return
+end
+
+-- Access the node data
+if node:is_obj() then
+  local obj = node:get_obj()
+  -- Process object
+end
 ```
 
-#### json.parse_string(content)
-
-This function takes a JSON string as its argument and returns an ok `boolean`, the `JsonNode`, and an error `string` 
+#### json.parse_string(content: string): (boolean, JsonNode, string)
+Parses a JSON string into a JsonNode structure.
 
 ```lua
+local json = require "path.to.json"
+
 local content = [[
-  {
-    "name": "John"
-  }
+{
+  "name": "John",
+  "active": true,
+  "data": [1, 2, 3]
+}
 ]]
 
 local ok, node, err = json.parse_string(content)
-
-assert(ok, err)
+if not ok then
+  print("Parse error:", err)
+  return
+end
 ```
 
-#### json.parse_string_to_record(content, rec)
-
-This function takes a JSON string and a record type as its arguments and returns an ok `boolean`, a record of type `rec`, and an error `string` 
+#### json.parse_string_to_record(content: string, rec: type): (boolean, rec, string)
+Directly parses a JSON string into a nelua record.
 
 ```lua
-local content = [[
-  {
-    "state": "FCT",
-    "age": 10,
-    "props": {
-      "height": 15
-    },
-    "arr": [1,2,3,4]
-  }
-]]
+local json = require "path.to.json"
 
-local Rec = @record{
-  state: string,
-  age: integer,
-  props: record{
-    height: integer
-  },
-  arr: sequence(integer)
+local Config = @record{
+  debug: boolean,
+  port: integer,
+  hosts: sequence(string),
+  metadata: record{
+    version: string,
+    updated_at: string
+  }
 }
 
-
-local ok, rec, err = json.parse_string_to_record(content, Rec)
-
-assert(ok, err)
-print(rec.props.height) --> prints 15
-```
-
-#### json.parse_file_to_record(file_path, rec)
-
-This function takes a string file path and a record type as its arguments and returns an ok `boolean`, a record of type `rec`, and an error `string` 
-
-```lua
-local Rec = @record{
-  state: string,
-  age: integer,
-  props: record{
-    height: integer
-  },
-  arr: sequence(integer)
-}
-
-local ok, rec, err = json.parse_file_to_record("example.json", Rec)
-assert(ok, err)
-print(rec.props.height) --> prints 15
-```
-
-### Interacting with nodes
-
-After parsing from a JSON string, the resulting node has a few helper functions to make it easier to interact with them
-
-#### JsonNode:is()
-
-Returns a string representing the type of the current node (e.g., "OBJECT").
-
-```lua
 local content = [[
-  {
-    "name": "John"
+{
+  "debug": true,
+  "port": 8080,
+  "hosts": ["localhost", "127.0.0.1"],
+  "metadata": {
+    "version": "1.0.0",
+    "updated_at": "2024-02-12"
   }
+}
 ]]
 
-local ok, node, err = json.parse_from_string(content)
-
-assert(ok, err)
-
-print(node:is()) --> Will print `OBJECT`
+local ok, config, err = json.parse_string_to_record(content, Config)
+if not ok then
+  print("Failed to parse config:", err)
+  return
+end
 ```
 
-#### JsonNode:is_xxx()
+Type Mapping:
+- JSON object → record
+- JSON array → anybconiguous data structure
+- JSON string → string
+- JSON number → number
+- JSON boolean → boolean
+- JSON null → false
 
-Returns a boolean, `true` if the node is the relevant type, `false` otherwise 
+#### json.parse_file_to_record(file_path: string, rec: type): (boolean, rec, string)
+Directly parses a JSON file into a nelua record. Takes the same arguments and follows the same type mapping as `parse_string_to_record`.
+
+### Node Operations
+
+After parsing JSON into a JsonNode, you can use these methods to safely interact with the data:
+
+#### Type Checking Methods
+- `node:is()`: Returns a `string` describing the node type
+- `node:is_obj()`: Returns `true` if node is an object
+- `node:is_arr()`: Returns `true` if node is an array
+- `node:is_str()`: Returns `true` if node is a string
+- `node:is_num()`: Returns `true` if node is a number
+- `node:is_bool()`: Returns `true` if node is a boolean
+- `node:is_null()`: Returns `true` if node is null
+
+#### Value Access Methods
+Always check the type before accessing values:
 
 ```lua
-print(node:is_obj()) --> Prints `true` or `false`
+if node:is_obj() then
+  local obj = node:get_obj()
+  -- Work with object
+elseif node:is_arr() then
+  local arr = node:get_arr()
+  -- Work with array
+elseif node:is_str() then
+  local str = node:get_str()
+  -- Work with string
+elseif node:is_num() then
+  local num = node:get_num()
+  -- Work with number
+elseif node:is_bool() then
+  local bool = node:get_bool()
+  -- Work with boolean
+elseif node:is_null() then
+  -- Handle null case
+end
 ```
-
-functions for the different data types include:
-
-- JsonNode:is_obj()
-- JsonNode:is_num()
-- JsonNode:is_str()
-- JsonNode:is_arr()
-- JsonNode:is_bool()
-- JsonNode:is_null()
-
-#### JsonNode:get_xxx()
-
-Returns the corresponding value for the given data type.
-It is recommended to use `JsonNode:is_xxx()` functions before calling `JsonNode:get_xxx()` to ensure the type is correct.
-
-```lua
-assert(node:is_obj())
-local obj = node:get_obj()
-```
-
-functions for the different data types include:
-
-- JsonNode:get_obj()
-- JsonNode:get_num()
-- JsonNode:get_str()
-- JsonNode:get_arr()
-- JsonNode:get_bool()
-- JsonNode:get_null()
 
 ### Serialization
 
-This section highlights functions related to serialize internal nelua data structures to JSON
-
-#### json.serialize_record(rec)
-
-Takes a record and writes out its content in JSON format
+#### json.serialize_record(rec: record): string
+Converts a nelua record into a JSON string.
 
 ```lua
-local Rec = @record{
-  name: string
+local json = require "path.to.json"
+
+local User = @record{
+  name: string,
+  age: integer,
+  active: boolean,
+  tags: sequence(string)
 }
 
-local rec: Rec
-rec.name = "John"
+local user: User = {
+  name = "Alice",
+  age = 25,
+  active = true,
+  tags = {"admin", "staff"}
+}
 
-local result = json.serialize_record(rec)
-
-assert(result == '{"name": "John"}')
+local json_str = json.serialize_record(user)
+print(json_str)
+-- Prints {"name": "Alice", "age": 25, "active": true, "tags": ["admin", "staff"]}
 ```
 
-### How to run tests
+NB: All record fields must be of supported types
 
-To run tests, from the root of the project, run:
+## Error Handling
 
+The library handles errors by returning a boolean first, ensuring that users do not ignore when an error can occur:
+
+```lua
+local json = require "path.to.json"
+
+-- Always check the ok value
+local ok, result, err = json.parse_string(content)
+if not ok then
+  -- Handle error case
+  print("Error:", err)
+  return
+end
+
+-- Type validation
+if not result:is_obj() then
+  print("Expected object, got:", result:is())
+  return
+end
+
+-- Safe value access
+local obj = result:get_obj()
+```
+
+## Development
+
+### Running Tests
+From the project root:
 ```console
 $ nelua test.nelua
 ```
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new features
+4. Submit a pull request
+
+For questions or issues, please use the GitHub issue tracker.
