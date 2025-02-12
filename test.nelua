@@ -5,12 +5,16 @@ require "io"
 require "libs.ansicolor"
 
 ##[[
+  local parent_dir, err = lfs.currentdir()
+  assert(parent_dir, ("ERROR: %s"):format(err))
+]]
+
+local root_dir: string = #[parent_dir]#
+
+##[[
   local lfs = require "lfs"
 
   local function get_files()
-    local parent_dir, err = lfs.currentdir()
-    assert(parent_dir, ("ERROR: %s"):format(err))
-
     local changed_dir, err = lfs.chdir("tests")
     assert(changed_dir, ("ERROR: %s"):format(err))
     
@@ -53,6 +57,7 @@ local failed_tests: sequence(string)
 
 for _, file in ipairs(files) do
   local ok = os.execute(("nelua %s"):format(file))
+  file = file:sub(#root_dir + 2)
   if not ok then
     failed_tests:push(file)
     io.stderr:write(("%s Test: %s failed\n"):format(AnsiColor.new("[ERROR]"):Red():tostring(), file))

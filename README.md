@@ -22,17 +22,17 @@ This section details the functions exposed by the library along with usage examp
 
 This section covers functions related to parsing JSON into internal data structures.
 
-#### json.parse_from_file(file_path)
+#### json.parse_file(file_path)
 
 This function takes a file path as its argument and returns an ok `boolean`, the `JsonNode`, and an error `string` 
 
 ```lua
-local ok, node, err = json.parse_from_file("test.json")
+local ok, node, err = json.parse_file("test.json")
 
 assert(ok, err)
 ```
 
-#### json.parse_from_string(content)
+#### json.parse_string(content)
 
 This function takes a JSON string as its argument and returns an ok `boolean`, the `JsonNode`, and an error `string` 
 
@@ -43,9 +43,60 @@ local content = [[
   }
 ]]
 
-local ok, node, err = json.parse_from_string(content)
+local ok, node, err = json.parse_string(content)
 
 assert(ok, err)
+```
+
+#### json.parse_string_to_record(content, rec)
+
+This function takes a JSON string and a record type as its arguments and returns an ok `boolean`, a record of type `rec`, and an error `string` 
+
+```lua
+local content = [[
+  {
+    "state": "FCT",
+    "age": 10,
+    "props": {
+      "height": 15
+    },
+    "arr": [1,2,3,4]
+  }
+]]
+
+local Rec = @record{
+  state: string,
+  age: integer,
+  props: record{
+    height: integer
+  },
+  arr: sequence(integer)
+}
+
+
+local ok, rec, err = json.parse_string_to_record(content, Rec)
+
+assert(ok, err)
+print(rec.props.height) --> prints 15
+```
+
+#### json.parse_file_to_record(file_path, rec)
+
+This function takes a string file path and a record type as its arguments and returns an ok `boolean`, a record of type `rec`, and an error `string` 
+
+```lua
+local Rec = @record{
+  state: string,
+  age: integer,
+  props: record{
+    height: integer
+  },
+  arr: sequence(integer)
+}
+
+local ok, rec, err = json.parse_file_to_record("example.json", Rec)
+assert(ok, err)
+print(rec.props.height) --> prints 15
 ```
 
 ### Interacting with nodes

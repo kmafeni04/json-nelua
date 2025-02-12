@@ -349,7 +349,7 @@ function Parser:destroy()
   $self = (@Parser)()
 end
 
--- Forward declare mutually called functions
+-- Forward declared mutually called functions
 local Parser.parse_from_token: function(self: Parser, token: Token): (boolean, JsonNode, string)
 local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
 local Parser.parse_array: function(self: Parser):(boolean, JsonNode, string)
@@ -382,7 +382,7 @@ end
 
 function Parser:advance_comma_unless(ttype: TokenType): (boolean, Token, string)
   if self:peek().type == TokenType.COMMA then
-      if self.tokens[$self.index + 1].type == ttype or self.tokens[$self.index + 1].type == TokenType.EOF then
+      if self:peek_next().type == ttype or self:peek_next().type == TokenType.EOF then
         local line, char = pos_to_line_char(self:peek().start_pos, self.content)
         return false, self:peek(), ("[%d:%d]: Trailing comma"):format(line, char)
       end
@@ -510,21 +510,9 @@ function Parser:parse(): (boolean, JsonNode, string)
   return self:parse_from_token(self:peek())
 end
 
--- TODO: Finish implementation
-function Parser:parse_record(rec: type): (boolean, #[rec.value]#, string)
-  ## static_assert(rec.value.is_record, "Parameter `rec` must be of type `record`")
-  ## static_assert(not rec.value.is_empty, "Parameter `rec` cannot be an empty record")
-
-  assert(false, "UNIMPLEMENTED")
-
-  local result: rec
-
-  return true, result, ""
-end
-
 local json = @record{}
 
-function json.parse_from_file(file_path: string): (boolean, JsonNode, string)
+function json.parse_file(file_path: string): (boolean, JsonNode, string)
   local content_file, err = io.open(file_path)
 
   if err ~= "" then
@@ -542,7 +530,7 @@ function json.parse_from_file(file_path: string): (boolean, JsonNode, string)
   return ok, node, err
 end
 
-function json.parse_from_string(content: string): (boolean, JsonNode, string)
+function json.parse_string(content: string): (boolean, JsonNode, string)
   local ok, parser, err = Parser.new(content)
   if not ok then
     return ok, (@JsonNode)(), err
@@ -573,6 +561,116 @@ end
     return false
   end
 ]]
+
+function json.parse_string_to_record(content: string, rec: type): (boolean, #[rec.value]#, string)
+  local ok, parser, err = Parser.new(content)
+  if not ok then
+    return ok, (@rec)(), err
+  end
+
+  local ok, node, err = parser:parse()
+  if not ok then
+    return ok, (@rec)(), err
+  end
+
+  if not node:is_obj() then
+    return false, (@rec)(), "Node is not an object and can not be parsed to a record"
+  end
+  local function traverse_array(arr: auto, T: type): (boolean, #[T.value]#, string)
+    local sub_result: T
+    ## local sub_type = T.value.subtype
+    for i, v in ipairs(arr) do
+      ## if sub_type.is_contiguous and not sub_type.is_string then
+        if not v:is_arr() then
+          return false, (@T)(), ("`ARRAY` expected, got `%s`"):format(v:is())
+        end
+        local ok, res, err = traverse_array(v:get_arr(), #[sub_type]#)
+        if not ok then
+          return false, (@T)(), err
+        end
+        sub_result[i] = res
+      ## elseif sub_type.is_record and not (sub_type.is_string or sub_type.is_container) then 
+        local ok, res, err = traverse_node(v, #[sub_type]#)
+        if not ok then
+          return ok, (@T)(), err
+        end
+        sub_result[i] = res
+      ## elseif sub_type.is_string then
+        sub_result[i] = v:get_str()
+      ## elseif sub_type.is_scalar then
+        sub_result[i] = v:get_num()
+      ## elseif sub_type.is_boolean then
+        sub_result[i] = v:get_bool()
+      ## elseif sub_type.is_null then
+        sub_result[i] = v:get_null()
+      ## end
+    end
+    return true, sub_result, ""
+  end
+
+  local function traverse_node(node: JsonNode, T: type): (boolean, #[T.value]#, string)
+    local result: T
+    local current = node:get_obj()
+
+
+    for k in pairs(current) do
+      local field_exits = false
+      ## for _, field in ipairs(T.value.fields) do
+        if k == #[field.name]# then
+          field_exits = true
+        end
+      ## end
+      if not field_exits then
+        return false, (@T)(), ("Field `%s` does not exist in record"):format(k)
+      end
+    end
+
+    ## for _, field in ipairs(T.value.fields) do
+      ## static_assert(is_parseable(field.type), ("Can not parse array to JSON, unsupported type `%s`"):format(tostring(field.type)))
+      local current_field = current[#[field.name]#]
+      ## if field.type.is_contiguous and not field.type.is_string then
+        local ok, res, err = traverse_array(current_field:get_arr(), #[field.type]#)
+        if not ok then
+          return ok, (@T)(), ("Error parsing field `%s`: %s"):format(#[field.name]#, err)
+        end
+        result.#|field.name|# = res
+      ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
+        local ok, sub_result, err = traverse_node(current_field, #[field.type]#)
+        if not ok then
+          return ok, (@T)(), err
+        end
+        result.#|field.name|# = sub_result
+      ## elseif field.type.is_string then
+        result.#|field.name|# = current_field:get_str()
+      ## elseif field.type.is_scalar then
+        result.#|field.name|# = current_field:get_num()
+      ## elseif field.type.is_boolean then
+        result.#|field.name|# = current_field:get_bool()
+      ## elseif field.type.is_niltype then
+        result.#|field.name|# = current_field:get_null()
+      ## else
+        return false, (@T)(), "UNREACHABLE"
+      ## end
+    ## end
+
+    return true, result, ""
+  end
+
+  return traverse_node(node, rec)
+end
+
+function json.parse_file_to_record(file_path: string, rec: type)
+  local content_file, err = io.open(file_path)
+
+  if err ~= "" then
+    return false, (@rec)(), err
+  end
+
+  local content = content_file:read("a")
+
+  return json.parse_string_to_record(content, rec)
+end
+
 
 local function array_tostring(arr: auto): string
   ## static_assert(arr.type.is_contiguous and not arr.type.is_string, "Parameter `arr` must be a contiguous data structure")

@@ -4,11 +4,64 @@ local json = require "..json"
 do
   local content = [[
     {
+      "state": "FCT",
+      "age": 10,
+      "props": {
+        "height": 15
+      },
+      "arr": [1,2,3,4]
+    }
+  ]]
+
+  local Rec = @record{
+    state: string,
+    age: integer,
+    props: record{
+      height: integer
+    },
+    arr: sequence(integer)
+  }
+  
+
+  local ok, rec, err = json.parse_string_to_record(content, Rec)
+
+  assert(ok, err)
+  assert(rec.state == "FCT")
+  assert(rec.age == 10)
+  assert(rec.props.height == 15)
+  assert(rec.arr[1] == 1)
+  assert(rec.arr[4] == 4)
+end
+
+do
+  local Rec = @record{
+    state: string,
+    age: integer,
+    props: record{
+      height: integer
+    },
+    arr: sequence(integer)
+  }
+  
+
+  local ok, rec, err = json.parse_file_to_record("test-files/to_record.json", Rec)
+
+  assert(ok, err)
+  assert(rec.state == "FCT")
+  assert(rec.age == 10)
+  assert(rec.props.height == 15)
+  assert(rec.arr[1] == 1)
+  assert(rec.arr[4] == 4)
+end
+
+do
+  local content = [[
+    {
       "name": "John"
     }
   ]]
 
-  local ok, node, err = json.parse_from_string(content)
+  local ok, node, err = json.parse_string(content)
 
   assert(ok, err)
 
@@ -24,7 +77,7 @@ do
     }
   ]]
 
-  local ok, node, err = json.parse_from_string(content)
+  local ok, node, err = json.parse_string(content)
 
   assert(ok, err)
 
@@ -36,7 +89,7 @@ do
 end
 
 do
-  local ok, node, err = json.parse_from_file("test-files/test.json")
+  local ok, node, err = json.parse_file("test-files/test.json")
 
   assert(ok, err)
 
@@ -51,11 +104,52 @@ end
 do
   local content = [[
     {
+      "state": "FCT",
+      "age": 10,
+      "props": {
+        "height": 15
+      },
+      "arr": [1,2,3,4]
+    }
+  ]]
+
+  local Rec = @record{
+    state: string,
+    props: record{
+      height: integer
+    },
+    arr: sequence(integer)
+  }
+  
+
+  local ok, rec, err = json.parse_string_to_record(content, Rec)
+
+  assert(not ok, "Test expected to faile with `Field does not exist in record`")
+end
+
+do
+  local Rec = @record{
+    state: string,
+    props: record{
+      height: integer
+    },
+    arr: sequence(integer)
+  }
+  
+
+  local ok, rec, err = json.parse_file_to_record("test-files/to_record.json", Rec)
+
+  assert(not ok, "Test expected to faile with `Field does not exist in record`")
+end
+
+do
+  local content = [[
+    {
       "name": "lol",
     }
   ]]
 
-  local ok, node, err = json.parse_from_string(content)
+  local ok, node, err = json.parse_string(content)
 
   assert(not ok, "Test should to fail with `Trailing comma`")
 end
@@ -63,7 +157,7 @@ end
 do
   local content = '{"name": "lol}'
 
-  local ok, node, err = json.parse_from_string(content)
+  local ok, node, err = json.parse_string(content)
 
   assert(not ok, "Test should to fail with `Unexpected end of file`")
 end
