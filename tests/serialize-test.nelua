@@ -11,5 +11,61 @@ do
 
   local result = json.serialize_record(rec)
 
-  assert(result == '{"name": "John"}')
+  local expected = '{"name": "John"}'
+
+  assert(result == expected, ("Expected `%s` but got %s"):format(expected, result))
+end
+
+do
+  local Rec = @record{
+    name: string
+  }
+
+  local rec: Rec
+  rec.name = "John"
+
+  local result = json.pretty_serialize_record(rec)
+
+  local expected = [[
+{
+    "name": "John"
+}]]
+
+  assert(result == expected, ("Expected `%s` but got `%s`"):format(expected, result))
+end
+
+do
+  local Rec = @record{
+    name: string,
+    age: integer,
+    likes: [5]string,
+    things: record{
+      num: uinteger,
+      str: string
+    }
+  }
+
+  local rec: Rec
+  rec.name = "John"
+
+  local result = json.pretty_serialize_record(rec)
+
+  local expected = [[
+{
+    "name": "John",
+    "age": 0,
+    "likes": [
+        "",
+        "",
+        "",
+        "",
+        ""
+    ],
+    "things": {
+        "num": 0,
+        "str": ""
+    }
+}]]
+
+  assert(result == expected, ("Expected `%s` but got `%s`"):format(expected, result))
 end

@@ -690,7 +690,7 @@ local function array_tostring(arr: auto): string
     ## if sub.is_contiguous and not sub.is_string then
       sb:write(array_tostring(v))
     ## elseif sub.is_record and not (sub.is_string or sub.is_container) then 
-      sb:write(json.encode(v))
+      sb:write(json.serialize_record(v))
     ## elseif sub.is_string then
       sb:write('"')
       sb:write(v)
@@ -745,6 +745,83 @@ function json.serialize_record(rec: auto): string
   end
 
   sb:write("}")
+  return sb:promote()
+end
+
+local function pretty_array_tostring(arr: auto, indent: uinteger): string
+  ## static_assert(arr.type.is_contiguous and not arr.type.is_string, "Parameter `arr` must be a contiguous data structure")
+  ## static_assert(is_parseable(arr.type.subtype), ("Can not parse array to JSON, unsupported type `%s`"):format(tostring(arr.type.subtype)))
+
+  indent = indent == 0 and 1 or indent 
+  local tab = string.rep("    ", indent)
+  local sb: stringbuilder
+  sb:write("[\n" .. tab)
+  
+  ## local sub = arr.type.subtype
+  local index = 0 
+  for _, v in ipairs(arr) do
+    ## if sub.is_contiguous and not sub.is_string then
+      sb:write(pretty_array_tostring(v, indent + 1))
+    ## elseif sub.is_record and not (sub.is_string or sub.is_container) then 
+      sb:write(json.pretty_serialize_record(v, indent + 1))
+    ## elseif sub.is_string then
+      sb:write('"')
+      sb:write(v)
+      sb:write('"')
+    ## elseif sub.is_niltype then
+      sb:write("null")
+    ## else
+      sb:write(v)
+    ## end
+    sb:write(",")
+    sb:write("\n" .. tab)
+    index = index + 1
+    if 0 < index and index >= #arr then
+      sb:rollback(#tab + 2)
+    end
+  end
+  sb:write("\n" .. string.rep("    ", indent - 1) .. "]")
+  return sb:promote()
+end
+
+function json.pretty_serialize_record(rec: auto, indent: uinteger): string
+  ## static_assert(rec.type.is_record, "Parameter `rec` must be of type `record`")
+
+  indent = indent == 0 and 1 or indent 
+  local tab = string.rep("    ", indent)
+  local sb: stringbuilder
+  sb:write("{\n" .. tab)
+
+  local index = 0
+  local rec_len = #[#rec.type.fields]#
+  ## for _, field in ipairs(rec.type.fields) do
+    ## static_assert(is_parseable(field.type), ("Can not parse record to JSON, unsupported type `%s`"):format(tostring(field.type)))
+
+    sb:writef('"%s": ', #[field.name]#)
+
+    ## if field.type.is_contiguous and not field.type.is_string then
+      sb:write(pretty_array_tostring(rec.#|field.name|#, indent + 1))
+    ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
+      sb:write(json.pretty_serialize_record(rec.#|field.name|#, indent + 1))
+    ## elseif field.type.is_string then
+      sb:write('"')
+      sb:write(rec.#|field.name|#)
+      sb:write('"')
+    ## elseif field.type.is_niltype then
+      sb:write("null")
+    ## else
+      sb:write(rec.#|field.name|#)
+    ## end
+
+    sb:write(",")
+    sb:write("\n" .. tab)
+    index = index + 1
+  ## end
+  if 0 < index and index >= rec_len then
+    sb:rollback(#tab + 2)
+  end
+
+  sb:write("\n" .. string.rep("    ", indent - 1) .. "}")
   return sb:promote()
 end
 

@@ -222,6 +222,43 @@ print(json_str)
 
 NB: All record fields must be of supported types
 
+#### json.pretty_serialize_record(rec: record, indent: uinteger): string
+Converts a nelua record into a pretty JSON string.
+
+```lua
+local json = require "path.to.json"
+
+local User = @record{
+  name: string,
+  age: integer,
+  active: boolean,
+  tags: sequence(string)
+}
+
+local user: User = {
+  name = "Alice",
+  age = 25,
+  active = true,
+  tags = {"admin", "staff"}
+}
+
+local json_str = json.serialize_record(user)
+print(json_str)
+--[=[Prints
+{
+    "name": "Alice",
+    "age": 25,
+    "active": true,
+    "tags": [
+        "admin",
+        "staff"
+    ]
+}
+]=]
+```
+
+NB: All record fields must be of supported types
+
 ## Error Handling
 
 The library handles errors by returning a boolean first, ensuring that users do not ignore when an error can occur:
