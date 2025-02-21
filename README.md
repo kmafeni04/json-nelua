@@ -146,12 +146,12 @@ end
 ```
 
 Type Mapping:
-- JSON object → record
-- JSON array → anybconiguous data structure
-- JSON string → string
-- JSON number → number
-- JSON boolean → boolean
-- JSON null → false
+- JSON object -> record
+- JSON array -> anybconiguous data structure
+- JSON string -> string
+- JSON number -> number
+- JSON boolean -> boolean
+- JSON null -> false
 
 #### json.parse_file_to_record(file_path: string, rec: type): (boolean, rec, string)
 Directly parses a JSON file into a nelua record. Takes the same arguments and follows the same type mapping as `parse_string_to_record`.
