@@ -547,8 +547,11 @@ end
       return is_parseable(field_type.subtype)
     elseif field_type.is_record and not (field_type.is_string or field_type.is_container) then
       for _, field in pairs(field_type.fields) do
-        return is_parseable(field.type)
+        if not is_parseable(field.type) then
+          return false
+        end
       end
+      return true
     elseif field_type.is_string then
       return true
     elseif field_type.is_scalar and not field_type.is_enum then
