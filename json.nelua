@@ -1,7 +1,5 @@
 require "io"
 require "utf8"
-require "traits"
-require "allocators.default"
 
 local function pos_to_line_char(pos: integer, content: string)
   local s_line = 1

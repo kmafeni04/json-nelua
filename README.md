@@ -147,7 +147,7 @@ end
 
 Type Mapping:
 - JSON object -> record
-- JSON array -> anybconiguous data structure
+- JSON array -> any contiguous data structure
 - JSON string -> string
 - JSON number -> number
 - JSON boolean -> boolean
