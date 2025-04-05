@@ -100,6 +100,38 @@ do
   assert(node:get_obj()["object"]:get_obj()["nested_object"]:get_obj()["inner_key"]:get_str() == "inner_value")
 end
 
+do
+  local Config = @record{
+    debug: boolean,
+    port: integer,
+    hosts: sequence(string),
+    metadata: record{
+      version: string,
+      updated_at: string
+    }
+  }
+
+  local content = [[
+  {
+    "debug": true,
+    "port": 8080,
+    "hosts": ["localhost", "127.0.0.1"],
+    "metadata": {
+      "version": "1.0.0",
+      "updated_at": "2024-02-12"
+    }
+  }
+  ]]
+
+  local ok, config, err = json.parse_string_to_record(content, Config)
+
+  assert(ok, err)
+  assert(config.debug == true)
+  assert(config.port == 8080)
+  assert(config.hosts[1] == "localhost")
+  assert(config.metadata.version == "1.0.0")
+end
+
 -- Tests expected to fail
 do
   local content = [[

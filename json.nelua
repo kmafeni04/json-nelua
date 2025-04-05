@@ -16,17 +16,17 @@ local function pos_to_line_char(pos: integer, content: string)
 end
 
 local function unescape_str(str: string)
-  str = str:gsub("\\n", "\n")  -- Newline  
-  str = str:gsub("\\r", "\r")  -- Carriage return  
-  str = str:gsub("\\t", "\t")  -- Tab  
-  str = str:gsub("\\b", "\b")  -- Backspace  
+  str = str:gsub("\\n", "\n")  -- Newline
+  str = str:gsub("\\r", "\r")  -- Carriage return
+  str = str:gsub("\\t", "\t")  -- Tab
+  str = str:gsub("\\b", "\b")  -- Backspace
   str = str:gsub("\\f", "\f")  -- Form Feed
-  str = str:gsub('\\"', '"') -- Double quote  
-  str = str:gsub("\\\\", "\\") -- Backslash  
-  str = str:gsub("\\/", "/") -- Forwardslash  
+  str = str:gsub('\\"', '"') -- Double quote
+  str = str:gsub("\\\\", "\\") -- Backslash
+  str = str:gsub("\\/", "/") -- Forwardslash
   str = str:gsub("\\u(%x+)", function(h: string) -- Unicode characters
-    return utf8.char(tonumber(h, 16))  
-  end)  
+    return utf8.char(tonumber(h, 16))
+  end)
 
   return str
 end
@@ -355,7 +355,7 @@ local Parser.parse_object: function(self: Parser):(boolean, JsonNode, string)
 local Parser.parse_array: function(self: Parser):(boolean, JsonNode, string)
 
 function Parser:peek()
-  local index = $(self.index) 
+  local index = $(self.index)
   if index <= #self.tokens then
     return self.tokens[index]
   end
@@ -363,7 +363,7 @@ function Parser:peek()
 end
 
 function Parser:peek_next(): Token
-  local index = $(self.index) 
+  local index = $(self.index)
   if index + 1 <= #self.tokens then
     return self.tokens[index + 1]
   end
@@ -436,7 +436,7 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
       local ttype = token_type_tostring(self:peek().type)
       local line, char = pos_to_line_char(self:peek().start_pos, self.content)
       return false, (@JsonNode)({}), ("[%d:%d]: Expected `STRING`, got `%s`"):format(line, char, ttype)
-    end 
+    end
 
     local key = self:peek().val
 
@@ -452,7 +452,7 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
       local ttype = token_type_tostring(self:peek().type)
       local line, char = pos_to_line_char(self:peek().start_pos, self.content)
       return false, (@JsonNode)({}), ("[%d:%d]: Expected `COLON`, got `%s`"):format(line, char, ttype)
-    end 
+    end
     self:advance()
 
     local ok, val, err = self:parse_from_token(self:peek())
@@ -465,7 +465,7 @@ Parser.parse_object = function(self: Parser): (boolean, JsonNode, string)
 
 
     local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACE)
-    
+
     if not ok then
       return ok, (@JsonNode)({}), err
     end
@@ -496,7 +496,7 @@ Parser.parse_array = function(self: Parser): (boolean, JsonNode, string)
     self:advance()
 
     local ok, token, err = self:advance_comma_unless(TokenType.CLOSE_BRACKET)
-    
+
     if not ok then
       return ok, (@JsonNode)({}), err
     end
@@ -547,7 +547,7 @@ end
       return is_parseable(field_type.subtype)
     elseif field_type.is_record and not (field_type.is_string or field_type.is_container) then
       for _, field in pairs(field_type.fields) do
-        return is_parseable(field.type) 
+        return is_parseable(field.type)
       end
     elseif field_type.is_string then
       return true
@@ -595,7 +595,7 @@ function json.parse_string_to_record(content: string, rec: type): (boolean, #[re
           return false, (@T)(), err
         end
         sub_result[i] = res
-      ## elseif sub_type.is_record and not (sub_type.is_string or sub_type.is_container) then 
+      ## elseif sub_type.is_record and not (sub_type.is_string or sub_type.is_container) then
         local ok, res, err = traverse_node(v, #[sub_type]#)
         if not ok then
           return ok, (@T)(), err
@@ -640,7 +640,7 @@ function json.parse_string_to_record(content: string, rec: type): (boolean, #[re
           return ok, (@T)(), ("Error parsing field `%s`: %s"):format(#[field.name]#, err)
         end
         result.#|field.name|# = res
-      ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
+      ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then
         local ok, sub_result, err = traverse_node(current_field, #[field.type]#)
         if not ok then
           return ok, (@T)(), err
@@ -682,16 +682,16 @@ local function array_tostring(arr: auto, indent: facultative(uinteger)): string
   ## static_assert(is_parseable(arr.type.subtype), ("Can not parse array to JSON, unsupported type `%s`"):format(tostring(arr.type.subtype)))
 
   ## if not indent.type.is_niltype then
-    indent = indent == 0 and 1 or indent 
+    indent = indent == 0 and 1 or indent
     local tab = string.rep("    ", indent)
     local sb: stringbuilder
     sb:write("[\n" .. tab)
   ## else
     sb:write("[")
   ## end
-  
+
   ## local sub = arr.type.subtype
-  local index = 0 
+  local index = 0
   for _, v in ipairs(arr) do
     ## if sub.is_contiguous and not sub.is_string then
       ## if not indent.type.is_niltype then
@@ -699,7 +699,7 @@ local function array_tostring(arr: auto, indent: facultative(uinteger)): string
       ## else
         sb:write(array_tostring(v))
       ## end
-    ## elseif sub.is_record and not (sub.is_string or sub.is_container) then 
+    ## elseif sub.is_record and not (sub.is_string or sub.is_container) then
       ## if not indent.type.is_niltype then
         sb:write(serialize_record(v, indent + 1))
       ## else
@@ -738,7 +738,7 @@ local function serialize_record(rec: auto, indent: facultative(uinteger)): strin
 
   local sb: stringbuilder
   ## if not indent.type.is_niltype then
-    indent = indent == 0 and 1 or indent 
+    indent = indent == 0 and 1 or indent
     local tab = string.rep("    ", indent)
     sb:write("{\n" .. tab)
   ## else
@@ -758,7 +758,7 @@ local function serialize_record(rec: auto, indent: facultative(uinteger)): strin
       ## else
         sb:write(array_tostring(rec.#|field.name|#))
       ## end
-    ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then 
+    ## elseif field.type.is_record and not (field.type.is_string or field.type.is_container) then
       ## if not indent.type.is_niltype then
         sb:write(serialize_record(rec.#|field.name|#, indent + 1))
       ## else
