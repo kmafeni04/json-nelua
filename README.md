@@ -46,8 +46,8 @@ local json_str = [[
 }
 ]]
 
-local ok, user, err = json.parse_string_to_record(json_str, User)
-if not ok then
+local user, err = json.parse_string_to_record(json_str, User)
+if err ~= "" then
   print("Failed to parse:", err)
   return
 end
@@ -70,14 +70,14 @@ local json = require "path.to.json"
 
 ### Parsing Functions
 
-#### json.parse_file(file_path: string): (boolean, JsonNode, string)
+#### json.parse_file(file_path: string): (JsonNode, string)
 Parses a JSON file into a JsonNode structure.
 
 ```lua
 local json = require "path.to.json"
 
-local ok, node, err = json.parse_file("config.json")
-if not ok then
+local node, err = json.parse_file("config.json")
+if err ~= "" then
   print("Parse error:", err)
   return
 end
@@ -89,7 +89,7 @@ if node:is_obj() then
 end
 ```
 
-#### json.parse_string(content: string): (boolean, JsonNode, string)
+#### json.parse_string(content: string): (JsonNode, string)
 Parses a JSON string into a JsonNode structure.
 
 ```lua
@@ -103,14 +103,14 @@ local content = [[
 }
 ]]
 
-local ok, node, err = json.parse_string(content)
-if not ok then
+local node, err = json.parse_string(content)
+if err ~= "" then
   print("Parse error:", err)
   return
 end
 ```
 
-#### json.parse_string_to_record(content: string, rec: type): (boolean, rec, string)
+#### json.parse_string_to_record(content: string, rec: type): (rec, string)
 Directly parses a JSON string into a nelua record.
 
 ```lua
@@ -138,8 +138,8 @@ local content = [[
 }
 ]]
 
-local ok, config, err = json.parse_string_to_record(content, Config)
-if not ok then
+local config, err = json.parse_string_to_record(content, Config)
+if err ~= "" then
   print("Failed to parse config:", err)
   return
 end
@@ -153,7 +153,7 @@ Type Mapping:
 - JSON boolean -> boolean
 - JSON null -> false
 
-#### json.parse_file_to_record(file_path: string, rec: type): (boolean, rec, string)
+#### json.parse_file_to_record(file_path: string, rec: type): (rec, string)
 Directly parses a JSON file into a nelua record. Takes the same arguments and follows the same type mapping as `parse_string_to_record`.
 
 ### Node Operations
@@ -266,9 +266,9 @@ The library handles errors by returning a boolean first, ensuring that users do 
 ```lua
 local json = require "path.to.json"
 
--- Always check the ok value
-local ok, result, err = json.parse_string(content)
-if not ok then
+-- Always check the err value
+local result, err = json.parse_string(content)
+if err ~= "" then
   -- Handle error case
   print("Error:", err)
   return
