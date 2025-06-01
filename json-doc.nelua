@@ -1,0 +1,130 @@
+local ssdg = require "ssdg"
+
+local gen = ssdg.new{
+  lang = "lua",
+  lead = "-",
+  single_line = "--",
+  multi_line = {
+    starting = "--[[",
+    ending = "]]"
+  }
+}
+
+local subs: hashmap(string, string)
+subs["lang"] = gen.conf.lang
+
+gen:add([=[
+# json.nelua
+
+A JSON library for the [nelua](https://nelua.io) programming language.
+
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Reference](#reference)
+- [Error Handling](#error-handling)
+- [Development](#development)
+
+## Features
+- Parse JSON strings and files into native nelua data structures
+- Serialize compatible records into JSON strings
+- Parsing directly into nelua records
+- Support for all standard JSON types:
+  - Objects (key-value pairs)
+  - Arrays
+  - Strings
+  - Numbers
+  - Booleans
+  - Null
+
+## Quick Start
+
+```:lang:
+local json = require "path.to.json"
+
+-- Parse JSON directly into a record
+local User = @record{
+  name: string,
+  age: integer,
+  scores: sequence(number)
+}
+
+local json_str = [[
+{
+  "name": "John",
+  "age": 30,
+  "scores": [95.5, 88.0, 92.5]
+}
+]]
+
+local user, err = json.parse_string_to_record(json_str, User)
+if err ~= "" then
+  print("Failed to parse:", err)
+  return
+end
+
+print(user.name)    --> prints "John"
+print(user.age)     --> prints 30
+print(user.scores[1]) --> prints 95.5
+```
+
+## Installation
+
+### Setup
+1. Copy the `json.nelua` file into your project
+2. Require the library:
+```:lang:
+local json = require "path.to.json"
+```
+## Reference
+
+]=], {subs = subs})
+
+gen:add_file("json.nelua", { subs = subs })
+
+gen:add([[
+## Error Handling
+
+The library handles errors by returning a string describing the error
+If the string is not empty, an error has occured
+
+```:lang:
+local json = require "path.to.json"
+
+-- Always check the err value
+local result, err = json.parse_string(content)
+if err ~= "" then
+  -- Handle error case
+  print("Error:", err)
+  return
+end
+
+-- Type validation
+if not result:is_obj() then
+  print("Expected object, got:", result:is())
+  return
+end
+
+-- Safe value access
+local obj = result:get_obj()
+```
+
+## Development
+
+### Running Tests
+From the project root:
+```console
+$ nelua test.nelua
+```
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new features
+4. Submit a pull request
+
+For questions or issues, please use the GitHub issue tracker.
+]], { subs = subs })
+
+gen:write_file("README.md")

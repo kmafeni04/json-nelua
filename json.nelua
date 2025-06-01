@@ -202,6 +202,8 @@ local function tokenize(str: string): (sequence(Token), string)
   return tokens, ""
 end
 
+--- ### JsonNodeType enum
+---`
 local JsonNodeType = @enum{
   NULL = 0,
   BOOLEAN,
@@ -210,6 +212,7 @@ local JsonNodeType = @enum{
   ARRAY,
   OBJECT
 }
+---`
 
 local function json_node_type_tostring(jntype: JsonNodeType)
   switch jntype do
@@ -227,6 +230,9 @@ local function json_node_type_tostring(jntype: JsonNodeType)
   return ("Unknown type `%s`"):format(jntype)
 end
 
+--- ### JsonNode record
+--- Representing an individual json node after parsing
+---`
 local JsonNode = @record{
   val: union{
     bol: boolean, -- accounts for NULL
@@ -237,6 +243,7 @@ local JsonNode = @record{
   },
   type: JsonNodeType
 }
+---`
 
 function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, string, sequence(JsonNode), hashmap(string, JsonNode))): (JsonNode, string)
   local node: JsonNode = {}
@@ -265,56 +272,133 @@ function JsonNode.new(node_type: JsonNodeType, value: overload(niltype, string, 
   return (@JsonNode)({}), ("Invalid node type `%d`"):format(node_type)
 end
 
+--[[-
+Example usage:
+
+```:lang:
+if node:is_obj() then
+  local obj = node:get_obj()
+  -- Work with object
+elseif node:is_arr() then
+  local arr = node:get_arr()
+  -- Work with array
+elseif node:is_str() then
+  local str = node:get_str()
+  -- Work with string
+elseif node:is_num() then
+  local num = node:get_num()
+  -- Work with number
+elseif node:is_bool() then
+  local bool = node:get_bool()
+  -- Work with boolean
+elseif node:is_null() then
+  -- Handle null case
+end
+```
+-]]
+
+--- ### JsonNode:is
+--- Returns a string stating the node type
+---`
 function JsonNode:is(): string
+---`
   return json_node_type_tostring(self.type)
 end
 
+--- ### JsonNode:is_obj
+--- Returns true if node is an object
+---`
 function JsonNode:is_obj(): boolean
+---`
   return self.type == JsonNodeType.OBJECT
 end
 
+--- ### JsonNode:is_num
+--- Returns true if node is a number
+---`
 function JsonNode:is_num(): boolean
+---`
   return self.type == JsonNodeType.NUMBER
 end
 
+--- ### JsonNode:is_str
+--- Returns true if node is a string
+---`
 function JsonNode:is_str(): boolean
+---`
   return self.type == JsonNodeType.STRING
 end
 
+--- ### JsonNode:is_arr
+--- Returns true if node is an array
+---`
 function JsonNode:is_arr(): boolean
+---`
   return self.type == JsonNodeType.ARRAY
 end
 
+--- ### JsonNode:is_bool
+--- Returns true if node is a boolean
+---`
 function JsonNode:is_bool(): boolean
+---`
   return self.type == JsonNodeType.BOOLEAN
 end
 
+--- ### JsonNode:is_null
+--- Returns true if node is a null value
+---`
 function JsonNode:is_null(): boolean
+---`
   return self.type == JsonNodeType.NULL
 end
 
 
+--- ### JsonNode:get_obj
+--- Returns a hashmap of strings to JsonNodes from the JsonNode
+---`
 function JsonNode:get_obj(): hashmap(string, JsonNode)
+---`
   return self.val.obj
 end
 
+--- ### JsonNode:get_num
+--- Returns a number from the JsonNode
+---`
 function JsonNode:get_num(): number
+---`
   return self.val.num
 end
 
+--- ### JsonNode:get_str
+--- Returns a string from the JsonNode
+---`
 function JsonNode:get_str(): string
+---`
   return self.val.str
 end
 
+--- ### JsonNode:get_arr
+--- Returns an array from the JsonNode
+---`
 function JsonNode:get_arr(): sequence(JsonNode)
+---`
   return self.val.arr
 end
 
+--- ### JsonNode:get_bool
+--- Returns a boolean from the JsonNode
+---`
 function JsonNode:get_bool(): boolean
+---`
   return self.val.bol
 end
 
+--- ### JsonNode:get_null
+--- Returns a null value(false) from the JsonNode
+---`
 function JsonNode:get_null(): boolean
+---`
   return self.val.bol
 end
 
@@ -508,9 +592,34 @@ function Parser:parse(): (JsonNode, string)
   return self:parse_from_token(self:peek())
 end
 
+--- ### json record
+---`
 local json = @record{}
+---`
 
+--- ### json.parse_file
+--[[-
+Parses a JSON file into a JsonNode structure.
+
+```:lang:
+local json = require "path.to.json"
+
+local node, err = json.parse_file("config.json")
+if err ~= "" then
+  print("Parse error:", err)
+  return
+end
+
+-- Access the node data
+if node:is_obj() then
+  local obj = node:get_obj()
+  -- Process object
+end
+```
+-]]
+---`
 function json.parse_file(file_path: string): (JsonNode, string)
+---`
   local content_file, err = io.open(file_path)
 
   if err ~= "" then
@@ -528,7 +637,31 @@ function json.parse_file(file_path: string): (JsonNode, string)
   return node, err
 end
 
+--- ### json.parse_string
+--[[-
+Parses a JSON string into a JsonNode structure.
+
+```:lang:
+local json = require "path.to.json"
+
+local content = [=[
+{
+  "name": "John",
+  "active": true,
+reference "data": [1, 2, 3]
+}
+]=]
+
+local node, err = json.parse_string(content)
+if err ~= "" then
+  print("Parse error:", err)
+  return
+end
+```
+-]]
+---`
 function json.parse_string(content: string): (JsonNode, string)
+---`
   local parser, err = Parser.new(content)
   if err ~= "" then
     return (@JsonNode)(), err
@@ -539,7 +672,9 @@ function json.parse_string(content: string): (JsonNode, string)
 end
 
 ##[[
+  ---|
   ---@return boolean
+  ---| 
   local function is_parseable(field_type)
     if field_type.is_contiguous and not field_type.is_string then
       return is_parseable(field_type.subtype)
@@ -563,7 +698,53 @@ end
   end
 ]]
 
+--- ### json.parse_string_to_record
+--[[-
+Directly parses a JSON string into a nelua record.
+
+```:lang:
+local json = require "path.to.json"
+
+local Config = @record{
+  debug: boolean,
+  port: integer,
+  hosts: sequence(string),
+  metadata: record{
+    version: string,
+    updated_at: string
+  }
+}
+
+local content = [=[
+{
+  "debug": true,
+  "port": 8080,
+  "hosts": ["localhost", "127.0.0.1"],
+  "metadata": {
+    "version": "1.0.0",
+    "updated_at": "2024-02-12"
+  }
+}
+]=]
+
+local config, err = json.parse_string_to_record(content, Config)
+if err ~= "" then
+  print("Failed to parse config:", err)
+  return
+end
+```
+
+Type Mapping:
+- JSON object -> record
+- JSON array -> any contiguous data structure
+- JSON string -> string
+- JSON number -> number
+- JSON boolean -> boolean
+- JSON null -> false
+-]]
+---`
 function json.parse_string_to_record(content: string, rec: type): (#[rec.value]#, string)
+---`
   ## static_assert(rec.value.is_record, "Parameter `rec` must be a record type")
   local parser, err = Parser.new(content)
   if err ~= "" then
@@ -666,7 +847,11 @@ function json.parse_string_to_record(content: string, rec: type): (#[rec.value]#
   return traverse_node(node, rec)
 end
 
+--- ### json.parse_file_to_record
+--- Directly parses a JSON file into a nelua record, see [json.parse_string_to_record](#jsonparse_string_to_record) for more information
+---`
 function json.parse_file_to_record(file_path: string, rec: type)
+---`
   local content_file, err = io.open(file_path)
 
   if err ~= "" then
@@ -799,11 +984,81 @@ local function serialize_record(rec: auto, indent: facultative(uinteger)): strin
   return sb:promote()
 end
 
+--- ### json.serialize_record
+--[[-
+Converts a nelua record into a JSON string.
+
+```:lang:
+local json = require "path.to.json"
+
+local User = @record{
+  name: string,
+  age: integer,
+  active: boolean,
+  tags: sequence(string)
+}
+
+local user: User = {
+  name = "Alice",
+  age = 25,
+  active = true,
+  tags = {"admin", "staff"}
+}
+
+local json_str = json.serialize_record(user)
+print(json_str)
+-- Prints {"name": "Alice", "age": 25, "active": true, "tags": ["admin", "staff"]}
+```
+
+NB: All record fields must be of supported types
+-]]
+---`
 function json.serialize_record(rec: auto): string
+---`
   return serialize_record(rec)
 end
 
+--- ### json.pretty_serialize_record
+--[[-
+Converts a nelua record into a pretty JSON string.
+
+```:lang:
+local json = require "path.to.json"
+
+local User = @record{
+  name: string,
+  age: integer,
+  active: boolean,
+  tags: sequence(string)
+}
+
+local user: User = {
+  name = "Alice",
+  age = 25,
+  active = true,
+  tags = {"admin", "staff"}
+}
+
+local json_str = json.pretty_serialize_record(user, 1)
+print(json_str)
+--[=[Prints
+{
+    "name": "Alice",
+    "age": 25,
+    "active": true,
+    "tags": [
+        "admin",
+        "staff"
+    ]
+}
+]=]
+```
+
+NB: All record fields must be of supported types
+-]]
+---`
 function json.pretty_serialize_record(rec: auto, indent: uinteger): string
+---`
   return serialize_record(rec, indent)
 end
 
