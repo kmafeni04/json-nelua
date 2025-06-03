@@ -226,6 +226,12 @@ function JsonNode:get_null(): boolean
 local json = @record{}
 ```
 
+### json.JsonNode
+
+```lua
+local json.JsonNode = JsonNode
+```
+
 ### json.parse_file
 
 Parses a JSON file into a JsonNode structure.

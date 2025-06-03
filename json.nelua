@@ -13,15 +13,18 @@ local function pos_to_line_char(pos: integer, content: string)
   return s_line, s_char
 end
 
+local unescape_hash: hashmap(string, string)
+unescape_hash["n"] ="\n"
+unescape_hash["r"] ="\r"
+unescape_hash["t"] ="\t"
+unescape_hash["b"] ="\b"
+unescape_hash["f"] ="\f"
+unescape_hash['"'] ='"'
+unescape_hash["\\"] ="\\"
+unescape_hash["/"] ="/"
+
 local function unescape_str(str: string)
-  str = str:gsub("\\n", "\n")  -- Newline
-  str = str:gsub("\\r", "\r")  -- Carriage return
-  str = str:gsub("\\t", "\t")  -- Tab
-  str = str:gsub("\\b", "\b")  -- Backspace
-  str = str:gsub("\\f", "\f")  -- Form Feed
-  str = str:gsub('\\"', '"') -- Double quote
-  str = str:gsub("\\\\", "\\") -- Backslash
-  str = str:gsub("\\/", "/") -- Forwardslash
+  str = str:gsub('\\[nrtbf"\\/]', unescape_hash)
   str = str:gsub("\\u(%x+)", function(h: string) -- Unicode characters
     return utf8.char(tonumber(h, 16))
   end)
@@ -595,6 +598,11 @@ end
 --- ### json record
 ---`
 local json = @record{}
+---`
+
+--- ### json.JsonNode
+---`
+local json.JsonNode = JsonNode
 ---`
 
 --- ### json.parse_file
