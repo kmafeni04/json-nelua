@@ -1,4 +1,4 @@
-local ssdg = require "ssdg"
+local ssdg = require "ssdg.ssdg"
 
 local gen = ssdg.new{
   lang = "lua",
